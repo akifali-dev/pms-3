@@ -7,4 +7,111 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Models will be added as business logic is implemented.
+enum UserRole {
+  CEO
+  PM
+  CTO
+  SENIOR_DEVELOPER
+  DEVELOPER
+}
+
+enum TaskStatus {
+  BACKLOG
+  READY
+  IN_PROGRESS
+  DEV_TEST
+  TESTING
+  DONE
+  REJECTED
+}
+
+enum TaskType {
+  UI
+  AUTH
+  API
+  REFACTOR
+  CHART
+}
+
+model User {
+  id               String        @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  email            String        @unique
+  password         String
+  role             UserRole
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  createdProjects  Project[]     @relation("ProjectCreator")
+  ownedTasks       Task[]        @relation("TaskOwner")
+  activityLogs     ActivityLog[]
+  commentsWritten  Comment[]     @relation("CommentCreator")
+  commentsReceived Comment[]     @relation("CommentRecipient")
+}
+
+model Project {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  createdById String      @db.ObjectId
+  createdBy   User        @relation("ProjectCreator", fields: [createdById], references: [id])
+  milestones  Milestone[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Milestone {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  startDate DateTime
+  endDate   DateTime
+  projectId String   @db.ObjectId
+  project   Project  @relation(fields: [projectId], references: [id])
+  tasks     Task[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Task {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  title          String
+  description    String
+  status         TaskStatus
+  type           TaskType
+  ownerId        String         @db.ObjectId
+  owner          User           @relation("TaskOwner", fields: [ownerId], references: [id])
+  milestoneId    String         @db.ObjectId
+  milestone      Milestone      @relation(fields: [milestoneId], references: [id])
+  estimatedHours Float
+  reworkCount    Int            @default(0)
+  checklistItems ChecklistItem[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model ChecklistItem {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  taskId      String  @db.ObjectId
+  task        Task    @relation(fields: [taskId], references: [id])
+  label       String
+  isCompleted Boolean @default(false)
+}
+
+model ActivityLog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id])
+  date        DateTime @default(now())
+  description String
+  hoursSpent  Float
+}
+
+model Comment {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  message      String
+  createdById  String   @db.ObjectId
+  createdBy    User     @relation("CommentCreator", fields: [createdById], references: [id])
+  createdForId String   @db.ObjectId
+  createdFor   User     @relation("CommentRecipient", fields: [createdForId], references: [id])
+  createdAt    DateTime @default(now())
+}
