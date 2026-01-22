@@ -9,6 +9,7 @@ import {
   isAdminRole,
 } from "@/lib/api";
 import { TASK_STATUSES } from "@/lib/kanban";
+import { getChecklistForTaskType } from "@/lib/taskChecklists";
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -161,6 +162,16 @@ export async function POST(request) {
       },
     });
 
+    const checklistLabels = getChecklistForTaskType(type);
+    if (checklistLabels.length > 0) {
+      await tx.checklistItem.createMany({
+        data: checklistLabels.map((label) => ({
+          taskId: createdTask.id,
+          label,
+        })),
+      });
+    }
+
     await tx.taskStatusHistory.create({
       data: {
         taskId: createdTask.id,
@@ -170,7 +181,17 @@ export async function POST(request) {
       },
     });
 
-    return createdTask;
+    return tx.task.findUnique({
+      where: { id: createdTask.id },
+      include: {
+        owner: { select: { id: true, name: true, email: true, role: true } },
+        milestone: {
+          select: { id: true, title: true, projectId: true },
+        },
+        checklistItems: true,
+        statusHistory: true,
+      },
+    });
   });
 
   return buildSuccess("Task created.", { task }, 201);

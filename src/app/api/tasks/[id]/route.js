@@ -10,6 +10,7 @@ import {
   isAdminRole,
 } from "@/lib/api";
 import { getStatusLabel, isValidTransition } from "@/lib/kanban";
+import { getChecklistForTaskType } from "@/lib/taskChecklists";
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -111,6 +112,19 @@ export async function PATCH(request, { params }) {
       return buildError("Only PMs can approve or reject tasks.", 403);
     }
 
+    if (nextStatus === "TESTING") {
+      const checklistComplete =
+        task.checklistItems.length > 0 &&
+        task.checklistItems.every((item) => item.isCompleted);
+
+      if (!checklistComplete) {
+        return buildError(
+          "Complete the checklist before moving the task to testing.",
+          400
+        );
+      }
+    }
+
     updates.status = nextStatus;
     statusChange = { from: task.status, to: nextStatus };
 
@@ -161,18 +175,22 @@ export async function PATCH(request, { params }) {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    const updatedTask = await tx.task.update({
+    await tx.task.update({
       where: { id: taskId },
       data: updates,
-      include: {
-        owner: { select: { id: true, name: true, email: true, role: true } },
-        milestone: {
-          select: { id: true, title: true, projectId: true },
-        },
-        checklistItems: true,
-        statusHistory: true,
-      },
     });
+
+    if (updates.type && task.checklistItems.length === 0) {
+      const checklistLabels = getChecklistForTaskType(updates.type);
+      if (checklistLabels.length > 0) {
+        await tx.checklistItem.createMany({
+          data: checklistLabels.map((label) => ({
+            taskId,
+            label,
+          })),
+        });
+      }
+    }
 
     if (statusChange) {
       await tx.taskStatusHistory.create({
@@ -185,7 +203,17 @@ export async function PATCH(request, { params }) {
       });
     }
 
-    return updatedTask;
+    return tx.task.findUnique({
+      where: { id: taskId },
+      include: {
+        owner: { select: { id: true, name: true, email: true, role: true } },
+        milestone: {
+          select: { id: true, title: true, projectId: true },
+        },
+        checklistItems: true,
+        statusHistory: true,
+      },
+    });
   });
 
   return buildSuccess("Task updated.", { task: updated });

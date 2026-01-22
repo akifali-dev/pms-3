@@ -10,6 +10,7 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
   const { addToast } = useToast();
   const [taskItems, setTaskItems] = useState(tasks);
   const [pendingTaskId, setPendingTaskId] = useState(null);
+  const [pendingChecklistId, setPendingChecklistId] = useState(null);
   const [scope, setScope] = useState(currentUserId ? "mine" : "all");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [ownerFilter, setOwnerFilter] = useState("ALL");
@@ -94,6 +95,60 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
     setPendingTaskId(null);
   };
 
+  const handleChecklistToggle = async (taskId, item, nextValue) => {
+    setPendingChecklistId(item.id);
+    const response = await fetch(`/api/checklist-items/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isCompleted: nextValue }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      addToast({
+        title: "Checklist update failed",
+        message: data?.error ?? "Unable to update checklist item.",
+        variant: "error",
+      });
+      setPendingChecklistId(null);
+      return;
+    }
+
+    setTaskItems((prev) =>
+      prev.map((task) => {
+        if (task.id !== taskId) {
+          return task;
+        }
+
+        return {
+          ...task,
+          checklistItems: task.checklistItems.map((existing) =>
+            existing.id === item.id ? data.checklistItem : existing
+          ),
+        };
+      })
+    );
+
+    setPendingChecklistId(null);
+  };
+
+  const isChecklistComplete = (task) =>
+    task.checklistItems?.length > 0 &&
+    task.checklistItems.every((item) => item.isCompleted);
+
+  const canEditChecklist = (task) => {
+    if (!currentUserId) {
+      return false;
+    }
+
+    if (task.ownerId === currentUserId) {
+      return true;
+    }
+
+    return [roles.PM, roles.CTO, roles.SENIOR_DEV].includes(role);
+  };
+
   const renderActions = (task) => {
     const isPending = pendingTaskId === task.id;
     const buttonClass = isPending ? "pointer-events-none opacity-60" : "";
@@ -160,6 +215,14 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
     }
 
     const nextStatus = getNextStatuses(task.status)[0];
+
+    if (task.status === "DEV_TEST" && !isChecklistComplete(task)) {
+      return (
+        <p className="text-xs text-amber-200">
+          Complete the checklist before moving to testing.
+        </p>
+      );
+    }
 
     return (
       <ActionButton
@@ -265,6 +328,66 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                     <span className="w-fit rounded-full border border-white/10 px-3 py-1 text-xs text-white/60">
                       {getStatusLabel(task.status)}
                     </span>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+                      <div className="flex items-center justify-between text-xs text-white/60">
+                        <span className="font-semibold uppercase tracking-[0.2em]">
+                          Checklist
+                        </span>
+                        <span>
+                          {task.checklistItems?.filter((item) => item.isCompleted)
+                            .length ?? 0}
+                          /{task.checklistItems?.length ?? 0}
+                        </span>
+                      </div>
+                      {task.checklistItems?.length ? (
+                        <ul className="mt-3 space-y-2">
+                          {task.checklistItems.map((item) => {
+                            const isUpdating = pendingChecklistId === item.id;
+                            const isEditable = canEditChecklist(task);
+                            return (
+                              <li
+                                key={item.id}
+                                className={`flex items-start gap-2 text-xs text-white/70 ${
+                                  isUpdating ? "opacity-60" : ""
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={item.isCompleted}
+                                  disabled={!isEditable || isUpdating}
+                                  onChange={(event) =>
+                                    handleChecklistToggle(
+                                      task.id,
+                                      item,
+                                      event.target.checked
+                                    )
+                                  }
+                                  className="mt-0.5 h-4 w-4 rounded border-white/30 bg-transparent text-emerald-400"
+                                />
+                                <span
+                                  className={
+                                    item.isCompleted
+                                      ? "line-through text-white/40"
+                                      : ""
+                                  }
+                                >
+                                  {item.label}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 text-xs text-white/40">
+                          No checklist items assigned.
+                        </p>
+                      )}
+                      {task.status === "TESTING" && role === roles.PM && (
+                        <p className="mt-3 text-xs text-sky-200">
+                          PM review checklist for testing sign-off.
+                        </p>
+                      )}
+                    </div>
                     {renderActions(task)}
                   </div>
                 </div>
