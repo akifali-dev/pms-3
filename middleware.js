@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getSessionFromRequest } from "@/lib/session";
+import { getDefaultRouteForRole, roleHasRouteAccess } from "@/lib/roles";
 
 const protectedRoutes = [
   "/dashboard",
@@ -10,7 +12,7 @@ const protectedRoutes = [
 
 const authRoutes = ["/auth", "/auth/sign-in"];
 
-export function middleware(request) {
+export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
   if (authRoutes.some((route) => pathname.startsWith(route))) {
@@ -21,14 +23,29 @@ export function middleware(request) {
     pathname.startsWith(route)
   );
 
-  const isAuthenticated =
-    request.cookies.has("pms-session") ||
-    process.env.NODE_ENV === "development";
+  if (!isProtected) {
+    return NextResponse.next();
+  }
 
-  if (isProtected && !isAuthenticated) {
+  const session = await getSessionFromRequest(request);
+
+  if (!session) {
     const signInUrl = request.nextUrl.clone();
     signInUrl.pathname = "/auth/sign-in";
+    signInUrl.searchParams.set("denied", "1");
+    signInUrl.searchParams.set("reason", "Please sign in to continue.");
     return NextResponse.redirect(signInUrl);
+  }
+
+  if (!roleHasRouteAccess(session.role, pathname)) {
+    const fallbackUrl = request.nextUrl.clone();
+    fallbackUrl.pathname = getDefaultRouteForRole(session.role);
+    fallbackUrl.searchParams.set("denied", "1");
+    fallbackUrl.searchParams.set(
+      "reason",
+      "You do not have access to that area."
+    );
+    return NextResponse.redirect(fallbackUrl);
   }
 
   return NextResponse.next();

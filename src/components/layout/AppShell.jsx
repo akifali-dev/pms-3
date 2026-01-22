@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
 import Sidebar from "./Sidebar";
 import ActionButton from "../ui/ActionButton";
-import { quickActions, roleOptions } from "@/lib/navigation";
+import { quickActions } from "@/lib/navigation";
+import { getRoleById } from "@/lib/roles";
+import AccessDeniedToast from "@/components/layout/AccessDeniedToast";
 
-export default function AppShell({ children }) {
-  const [activeRole, setActiveRole] = useState(roleOptions[0]);
+export default function AppShell({ children, session }) {
+  const role = getRoleById(session?.role);
+  const roleLabel = role?.label ?? "Guest";
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
+      <AccessDeniedToast />
       <div className="flex min-h-screen flex-col lg:flex-row">
-        <Sidebar activeRole={activeRole} onRoleChange={setActiveRole} />
+        <Sidebar activeRole={role} session={session} />
         <div className="flex flex-1 flex-col">
           <header className="border-b border-white/10 bg-slate-950/80 px-6 py-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -20,7 +23,7 @@ export default function AppShell({ children }) {
                   Project Management System
                 </p>
                 <h1 className="text-2xl font-semibold text-white">
-                  Welcome, {activeRole.label}
+                  Welcome, {roleLabel}
                 </h1>
                 <p className="text-sm text-white/60">
                   Centralize delivery, reporting, and collaboration at scale.

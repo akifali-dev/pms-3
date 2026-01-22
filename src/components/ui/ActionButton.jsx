@@ -16,6 +16,7 @@ const variants = {
 export default function ActionButton({
   label,
   toast,
+  onClick,
   variant = "primary",
   size = "md",
   className = "",
@@ -29,13 +30,22 @@ export default function ActionButton({
     lg: "px-5 py-3 text-base",
   };
 
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    }
+    if (toast) {
+      addToast(toast);
+    }
+  };
+
   return (
     <button
       type={type}
       className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition ${
         sizes[size]
       } ${variants[variant]} ${className}`}
-      onClick={() => addToast(toast)}
+      onClick={handleClick}
     >
       {label}
     </button>
