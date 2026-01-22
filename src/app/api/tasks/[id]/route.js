@@ -9,6 +9,7 @@ import {
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
+import { getStatusLabel, isValidTransition } from "@/lib/kanban";
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -19,6 +20,7 @@ async function getTask(taskId) {
         select: { id: true, title: true, projectId: true },
       },
       checklistItems: true,
+      statusHistory: true,
     },
   });
 }
@@ -82,6 +84,7 @@ export async function PATCH(request, { params }) {
 
   const body = await request.json();
   const updates = {};
+  let statusChange = null;
 
   if (body?.title) {
     updates.title = body.title.trim();
@@ -91,8 +94,29 @@ export async function PATCH(request, { params }) {
     updates.description = body.description.trim();
   }
 
-  if (body?.status) {
-    updates.status = body.status;
+  if (body?.status && body.status !== task.status) {
+    const nextStatus = body.status;
+    const allowedTransition = isValidTransition(task.status, nextStatus);
+
+    if (!allowedTransition) {
+      return buildError(
+        `Invalid transition from ${getStatusLabel(
+          task.status
+        )} to ${getStatusLabel(nextStatus)}.`,
+        400
+      );
+    }
+
+    if (["DONE", "REJECTED"].includes(nextStatus) && context.role !== "PM") {
+      return buildError("Only PMs can approve or reject tasks.", 403);
+    }
+
+    updates.status = nextStatus;
+    statusChange = { from: task.status, to: nextStatus };
+
+    if (nextStatus === "REJECTED") {
+      updates.reworkCount = task.reworkCount + 1;
+    }
   }
 
   if (body?.type) {
@@ -104,10 +128,6 @@ export async function PATCH(request, { params }) {
       return buildError("Estimated hours must be a valid number.", 400);
     }
     updates.estimatedHours = body.estimatedHours;
-  }
-
-  if (typeof body?.reworkCount === "number") {
-    updates.reworkCount = body.reworkCount;
   }
 
   if (body?.milestoneId) {
@@ -140,16 +160,32 @@ export async function PATCH(request, { params }) {
     return buildError("No valid updates provided.", 400);
   }
 
-  const updated = await prisma.task.update({
-    where: { id: taskId },
-    data: updates,
-    include: {
-      owner: { select: { id: true, name: true, email: true, role: true } },
-      milestone: {
-        select: { id: true, title: true, projectId: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedTask = await tx.task.update({
+      where: { id: taskId },
+      data: updates,
+      include: {
+        owner: { select: { id: true, name: true, email: true, role: true } },
+        milestone: {
+          select: { id: true, title: true, projectId: true },
+        },
+        checklistItems: true,
+        statusHistory: true,
       },
-      checklistItems: true,
-    },
+    });
+
+    if (statusChange) {
+      await tx.taskStatusHistory.create({
+        data: {
+          taskId,
+          fromStatus: statusChange.from,
+          toStatus: statusChange.to,
+          changedById: context.user.id,
+        },
+      });
+    }
+
+    return updatedTask;
   });
 
   return buildSuccess("Task updated.", { task: updated });
@@ -185,6 +221,7 @@ export async function DELETE(request, { params }) {
   try {
     await prisma.$transaction([
       prisma.checklistItem.deleteMany({ where: { taskId } }),
+      prisma.taskStatusHistory.deleteMany({ where: { taskId } }),
       prisma.task.delete({ where: { id: taskId } }),
     ]);
 

@@ -2,27 +2,29 @@ import ActionButton from "@/components/ui/ActionButton";
 import PlaceholderUpload from "@/components/ui/PlaceholderUpload";
 import TaskBoard from "@/components/tasks/TaskBoard";
 import { getSession } from "@/lib/session";
-
-const tasks = [
-  {
-    title: "Draft kickoff brief",
-    team: "Program Ops",
-    status: "Queued",
-  },
-  {
-    title: "Finalize dependency map",
-    team: "Delivery",
-    status: "Awaiting input",
-  },
-  {
-    title: "Confirm vendor timelines",
-    team: "Procurement",
-    status: "Planned",
-  },
-];
+import { prisma } from "@/lib/prisma";
 
 export default async function TasksPage() {
   const session = await getSession();
+  const hasDatabase = Boolean(process.env.DATABASE_URL);
+  const currentUser =
+    hasDatabase && session?.email
+      ? await prisma.user.findUnique({
+          where: { email: session.email },
+          select: { id: true },
+        })
+      : null;
+
+  const tasks = hasDatabase
+    ? await prisma.task.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          owner: { select: { id: true, name: true, email: true, role: true } },
+          milestone: { select: { id: true, title: true, projectId: true } },
+          checklistItems: true,
+        },
+      })
+    : [];
 
   return (
     <div className="space-y-6">
@@ -49,7 +51,11 @@ export default async function TasksPage() {
         />
       </div>
 
-      <TaskBoard tasks={tasks} role={session?.role} />
+      <TaskBoard
+        tasks={tasks}
+        role={session?.role}
+        currentUserId={currentUser?.id ?? null}
+      />
 
       <PlaceholderUpload
         label="Task intake"

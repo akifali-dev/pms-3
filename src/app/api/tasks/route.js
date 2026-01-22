@@ -8,6 +8,7 @@ import {
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
+import { TASK_STATUSES } from "@/lib/kanban";
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -58,6 +59,7 @@ export async function GET(request) {
         },
       },
       checklistItems: true,
+      statusHistory: true,
     },
   });
 
@@ -91,6 +93,14 @@ export async function POST(request) {
       "Title, description, status, type, and milestone are required.",
       400
     );
+  }
+
+  if (!TASK_STATUSES.some((taskStatus) => taskStatus.id === status)) {
+    return buildError("Task status is invalid.", 400);
+  }
+
+  if (["DONE", "REJECTED"].includes(status) && context.role !== "PM") {
+    return buildError("Only PMs can approve or reject tasks.", 403);
   }
 
   if (!Number.isFinite(estimatedHours) || estimatedHours < 0) {
@@ -129,24 +139,38 @@ export async function POST(request) {
     resolvedOwnerId = context.user.id;
   }
 
-  const task = await prisma.task.create({
-    data: {
-      title,
-      description,
-      status,
-      type,
-      milestoneId,
-      ownerId: resolvedOwnerId,
-      estimatedHours,
-      reworkCount: 0,
-    },
-    include: {
-      owner: { select: { id: true, name: true, email: true, role: true } },
-      milestone: {
-        select: { id: true, title: true, projectId: true },
+  const task = await prisma.$transaction(async (tx) => {
+    const createdTask = await tx.task.create({
+      data: {
+        title,
+        description,
+        status,
+        type,
+        milestoneId,
+        ownerId: resolvedOwnerId,
+        estimatedHours,
+        reworkCount: 0,
       },
-      checklistItems: true,
-    },
+      include: {
+        owner: { select: { id: true, name: true, email: true, role: true } },
+        milestone: {
+          select: { id: true, title: true, projectId: true },
+        },
+        checklistItems: true,
+        statusHistory: true,
+      },
+    });
+
+    await tx.taskStatusHistory.create({
+      data: {
+        taskId: createdTask.id,
+        fromStatus: null,
+        toStatus: status,
+        changedById: context.user.id,
+      },
+    });
+
+    return createdTask;
   });
 
   return buildSuccess("Task created.", { task }, 201);
