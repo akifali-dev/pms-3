@@ -2,6 +2,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/layout/AppShell";
 import { ToastProvider } from "@/components/ui/ToastProvider";
+import { getSession } from "@/lib/session";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,14 +20,16 @@ export const metadata = {
     "Production-ready project management system with centralized delivery, reporting, and collaboration.",
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const session = await getSession();
+
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <ToastProvider>
-          <AppShell>{children}</AppShell>
+          <AppShell session={session}>{children}</AppShell>
         </ToastProvider>
       </body>
     </html>

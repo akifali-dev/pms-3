@@ -1,5 +1,7 @@
 import ActionButton from "@/components/ui/ActionButton";
 import PlaceholderUpload from "@/components/ui/PlaceholderUpload";
+import TaskBoard from "@/components/tasks/TaskBoard";
+import { getSession } from "@/lib/session";
 
 const tasks = [
   {
@@ -19,7 +21,9 @@ const tasks = [
   },
 ];
 
-export default function TasksPage() {
+export default async function TasksPage() {
+  const session = await getSession();
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 lg:flex-row lg:items-center lg:justify-between">
@@ -45,32 +49,7 @@ export default function TasksPage() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {tasks.map((task) => (
-          <div
-            key={task.title}
-            className="rounded-2xl border border-white/10 bg-slate-900/60 p-5"
-          >
-            <p className="text-sm font-semibold text-white">{task.title}</p>
-            <p className="mt-1 text-xs text-white/60">{task.team}</p>
-            <div className="mt-4 flex items-center justify-between">
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/60">
-                {task.status}
-              </span>
-              <ActionButton
-                label="Update"
-                size="sm"
-                variant="secondary"
-                toast={{
-                  title: "Task update",
-                  message: "Status updates will sync when tasks are wired.",
-                  variant: "warning",
-                }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
+      <TaskBoard tasks={tasks} role={session?.role} />
 
       <PlaceholderUpload
         label="Task intake"

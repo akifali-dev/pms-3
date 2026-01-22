@@ -1,27 +1,27 @@
-export const roleOptions = [
-  {
-    id: "admin",
-    label: "Admin",
-    description: "Organization-wide oversight",
-  },
-  {
-    id: "manager",
-    label: "Project Manager",
-    description: "Delivery and resource planning",
-  },
-  {
-    id: "contributor",
-    label: "Contributor",
-    description: "Execution and updates",
-  },
-];
+import { allRoles, roles } from "@/lib/roles";
 
 export const navigationItems = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Projects", href: "/projects" },
-  { label: "Milestones", href: "/milestones" },
-  { label: "Tasks", href: "/tasks" },
-  { label: "Reports", href: "/reports" },
+  { label: "Dashboard", href: "/dashboard", roles: allRoles },
+  {
+    label: "Projects",
+    href: "/projects",
+    roles: [roles.PM, roles.CTO, roles.SENIOR_DEV],
+  },
+  {
+    label: "Milestones",
+    href: "/milestones",
+    roles: [roles.PM, roles.CTO, roles.SENIOR_DEV],
+  },
+  {
+    label: "Tasks",
+    href: "/tasks",
+    roles: [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV, roles.DEV],
+  },
+  {
+    label: "Reports",
+    href: "/reports",
+    roles: [roles.CEO, roles.PM, roles.CTO],
+  },
 ];
 
 export const quickActions = [
