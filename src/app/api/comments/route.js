@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import {
-  ADMIN_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
@@ -19,6 +18,7 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const createdById = searchParams.get("createdById");
   const createdForId = searchParams.get("createdForId");
+  const taskId = searchParams.get("taskId");
 
   const where = {};
 
@@ -28,6 +28,9 @@ export async function GET(request) {
     }
     if (createdForId) {
       where.createdForId = createdForId;
+    }
+    if (taskId) {
+      where.taskId = taskId;
     }
   } else {
     where.OR = [
@@ -42,6 +45,7 @@ export async function GET(request) {
     include: {
       createdBy: { select: { id: true, name: true, email: true, role: true } },
       createdFor: { select: { id: true, name: true, email: true, role: true } },
+      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 
@@ -55,8 +59,7 @@ export async function POST(request) {
     return authError;
   }
 
-  const allowedRoles = [...ADMIN_ROLES, "DEVELOPER"];
-  const roleError = ensureRole(context.role, allowedRoles);
+  const roleError = ensureRole(context.role, ["PM", "CTO"]);
   if (roleError) {
     return roleError;
   }
@@ -64,29 +67,53 @@ export async function POST(request) {
   const body = await request.json();
   const message = body?.message?.trim();
   const createdForId = body?.createdForId;
+  const taskId = body?.taskId;
 
-  if (!message || !createdForId) {
-    return buildError("Message and recipient are required.", 400);
+  if (!message) {
+    return buildError("Message is required.", 400);
   }
 
-  const recipient = await prisma.user.findUnique({
-    where: { id: createdForId },
-    select: { id: true },
-  });
+  let resolvedRecipientId = createdForId;
+  let resolvedTaskId = taskId;
 
-  if (!recipient) {
-    return buildError("Recipient not found.", 404);
+  if (taskId) {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { id: true, ownerId: true },
+    });
+
+    if (!task) {
+      return buildError("Task not found.", 404);
+    }
+
+    resolvedTaskId = task.id;
+    resolvedRecipientId = task.ownerId;
+  } else if (createdForId) {
+    const recipient = await prisma.user.findUnique({
+      where: { id: createdForId },
+      select: { id: true },
+    });
+
+    if (!recipient) {
+      return buildError("Recipient not found.", 404);
+    }
+  }
+
+  if (!resolvedRecipientId) {
+    return buildError("Recipient is required.", 400);
   }
 
   const comment = await prisma.comment.create({
     data: {
       message,
       createdById: context.user.id,
-      createdForId,
+      createdForId: resolvedRecipientId,
+      taskId: resolvedTaskId ?? null,
     },
     include: {
       createdBy: { select: { id: true, name: true, email: true, role: true } },
       createdFor: { select: { id: true, name: true, email: true, role: true } },
+      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 

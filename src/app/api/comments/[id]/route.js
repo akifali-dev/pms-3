@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
-  ADMIN_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
@@ -16,6 +15,7 @@ async function getComment(commentId) {
     include: {
       createdBy: { select: { id: true, name: true, email: true, role: true } },
       createdFor: { select: { id: true, name: true, email: true, role: true } },
+      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 }
@@ -66,6 +66,11 @@ export async function PATCH(request, { params }) {
     return authError;
   }
 
+  const roleError = ensureRole(context.role, ["PM", "CTO"]);
+  if (roleError) {
+    return roleError;
+  }
+
   const commentId = params?.id;
   if (!commentId) {
     return buildError("Comment id is required.", 400);
@@ -93,6 +98,7 @@ export async function PATCH(request, { params }) {
     include: {
       createdBy: { select: { id: true, name: true, email: true, role: true } },
       createdFor: { select: { id: true, name: true, email: true, role: true } },
+      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 
@@ -106,8 +112,7 @@ export async function DELETE(request, { params }) {
     return authError;
   }
 
-  const allowedRoles = [...ADMIN_ROLES, "DEVELOPER"];
-  const roleError = ensureRole(context.role, allowedRoles);
+  const roleError = ensureRole(context.role, ["PM", "CTO"]);
   if (roleError) {
     return roleError;
   }

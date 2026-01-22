@@ -201,6 +201,20 @@ export async function PATCH(request, { params }) {
           changedById: context.user.id,
         },
       });
+
+      const actorName =
+        context.user?.name || context.user?.email || "A teammate";
+      const activityOwnerId = updates.ownerId ?? task.ownerId;
+
+      await tx.activityLog.create({
+        data: {
+          userId: activityOwnerId,
+          taskId,
+          category: "TASK",
+          hoursSpent: 0,
+          description: `Task status updated by ${actorName}: ${task.title} moved from ${statusChange.from ?? "new"} to ${statusChange.to}.`,
+        },
+      });
     }
 
     return tx.task.findUnique({
