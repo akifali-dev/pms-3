@@ -21,6 +21,7 @@ export default function ActionButton({
   size = "md",
   className = "",
   type = "button",
+  disabled = false,
 }) {
   const { addToast } = useToast();
 
@@ -31,6 +32,9 @@ export default function ActionButton({
   };
 
   const handleClick = () => {
+    if (disabled) {
+      return;
+    }
     if (onClick) {
       onClick();
     }
@@ -42,9 +46,10 @@ export default function ActionButton({
   return (
     <button
       type={type}
+      disabled={disabled}
       className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition ${
         sizes[size]
-      } ${variants[variant]} ${className}`}
+      } ${variants[variant]} ${disabled ? "opacity-60" : ""} ${className}`}
       onClick={handleClick}
     >
       {label}

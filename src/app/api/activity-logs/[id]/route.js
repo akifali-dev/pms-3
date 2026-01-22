@@ -15,6 +15,7 @@ async function getActivityLog(logId) {
     where: { id: logId },
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
+      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 }
@@ -98,6 +99,17 @@ export async function PATCH(request, { params }) {
     updates.hoursSpent = body.hoursSpent;
   }
 
+  if (body?.category) {
+    const category = body.category.toString().trim().toUpperCase();
+    if (!["LEARNING", "RESEARCH", "IDLE"].includes(category)) {
+      return buildError(
+        "Category must be one of: learning, research, idle.",
+        400
+      );
+    }
+    updates.category = category;
+  }
+
   if (Object.keys(updates).length === 0) {
     return buildError("No valid updates provided.", 400);
   }
@@ -107,6 +119,7 @@ export async function PATCH(request, { params }) {
     data: updates,
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
+      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 

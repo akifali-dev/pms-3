@@ -33,6 +33,13 @@ enum TaskType {
   CHART
 }
 
+enum ActivityCategory {
+  LEARNING
+  RESEARCH
+  IDLE
+  TASK
+}
+
 model User {
   id               String        @id @default(auto()) @map("_id") @db.ObjectId
   name             String
@@ -86,6 +93,8 @@ model Task {
   reworkCount    Int            @default(0)
   checklistItems ChecklistItem[]
   statusHistory  TaskStatusHistory[]
+  activityLogs   ActivityLog[]
+  comments       Comment[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
@@ -110,12 +119,15 @@ model ChecklistItem {
 }
 
 model ActivityLog {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId      String   @db.ObjectId
-  user        User     @relation(fields: [userId], references: [id])
-  date        DateTime @default(now())
+  id          String           @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String           @db.ObjectId
+  user        User             @relation(fields: [userId], references: [id])
+  taskId      String?          @db.ObjectId
+  task        Task?            @relation(fields: [taskId], references: [id])
+  date        DateTime         @default(now())
   description String
   hoursSpent  Float
+  category    ActivityCategory @default(TASK)
 }
 
 model Comment {
@@ -125,5 +137,7 @@ model Comment {
   createdBy    User     @relation("CommentCreator", fields: [createdById], references: [id])
   createdForId String   @db.ObjectId
   createdFor   User     @relation("CommentRecipient", fields: [createdForId], references: [id])
+  taskId       String?  @db.ObjectId
+  task         Task?    @relation(fields: [taskId], references: [id])
   createdAt    DateTime @default(now())
 }

@@ -1,5 +1,8 @@
 import ActionButton from "@/components/ui/ActionButton";
 import PlaceholderUpload from "@/components/ui/PlaceholderUpload";
+import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
+import { isAdminRole, normalizeRole } from "@/lib/api";
 
 const reports = [
   {
@@ -60,9 +63,38 @@ const metricsChecklist = [
   "Checklist compliance",
   "Blocked tasks",
   "Milestone health",
+  "Activity logs",
+  "Manager comments",
 ];
 
-export default function ReportsPage() {
+export default async function ReportsPage() {
+  const session = await getSession();
+  const hasDatabase = Boolean(process.env.DATABASE_URL);
+  const role = normalizeRole(session?.role);
+  const isAdmin = isAdminRole(role);
+
+  let activitySummary = null;
+
+  if (hasDatabase && isAdmin) {
+    const rangeStart = new Date();
+    rangeStart.setDate(rangeStart.getDate() - 7);
+
+    const [activityCount, commentCount, hoursTotal] = await Promise.all([
+      prisma.activityLog.count({ where: { date: { gte: rangeStart } } }),
+      prisma.comment.count({ where: { createdAt: { gte: rangeStart } } }),
+      prisma.activityLog.aggregate({
+        where: { date: { gte: rangeStart } },
+        _sum: { hoursSpent: true },
+      }),
+    ]);
+
+    activitySummary = {
+      activityCount,
+      commentCount,
+      hoursTotal: Number(hoursTotal?._sum?.hoursSpent ?? 0),
+    };
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 lg:flex-row lg:items-center lg:justify-between">
@@ -171,6 +203,34 @@ export default function ReportsPage() {
           </ul>
         </div>
       </div>
+
+      {activitySummary && (
+        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+          <p className="text-sm font-semibold text-white">
+            Accountability coverage (last 7 days)
+          </p>
+          <div className="mt-4 grid gap-3 text-xs text-white/70 md:grid-cols-3">
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+              <p className="text-white/50">Activity logs</p>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {activitySummary.activityCount}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+              <p className="text-white/50">Manager comments</p>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {activitySummary.commentCount}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+              <p className="text-white/50">Hours logged</p>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {activitySummary.hoursTotal}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <PlaceholderUpload
         label="Executive slides"

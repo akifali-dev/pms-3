@@ -181,6 +181,16 @@ export async function POST(request) {
       },
     });
 
+    await tx.activityLog.create({
+      data: {
+        userId: createdTask.ownerId,
+        taskId: createdTask.id,
+        category: "TASK",
+        hoursSpent: 0,
+        description: `Task created: ${createdTask.title} (${status}).`,
+      },
+    });
+
     return tx.task.findUnique({
       where: { id: createdTask.id },
       include: {
