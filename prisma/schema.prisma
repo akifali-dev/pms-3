@@ -85,8 +85,20 @@ model Task {
   estimatedHours Float
   reworkCount    Int            @default(0)
   checklistItems ChecklistItem[]
+  statusHistory  TaskStatusHistory[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+}
+
+model TaskStatusHistory {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  taskId      String     @db.ObjectId
+  task        Task       @relation(fields: [taskId], references: [id])
+  fromStatus  TaskStatus?
+  toStatus    TaskStatus
+  changedById String     @db.ObjectId
+  changedBy   User       @relation(fields: [changedById], references: [id])
+  changedAt   DateTime   @default(now())
 }
 
 model ChecklistItem {
