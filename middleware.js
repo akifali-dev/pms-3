@@ -9,6 +9,7 @@ const protectedRoutes = [
   "/tasks",
   "/activity",
   "/reports",
+  "/users",
 ];
 
 const authRoutes = ["/auth", "/auth/sign-in"];

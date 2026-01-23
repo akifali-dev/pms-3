@@ -27,6 +27,11 @@ export const navigationItems = [
     href: "/reports",
     roles: [roles.CEO, roles.PM, roles.CTO],
   },
+  {
+    label: "Create user",
+    href: "/users/create",
+    roles: [roles.CEO, roles.PM, roles.CTO],
+  },
 ];
 
 export const quickActions = [

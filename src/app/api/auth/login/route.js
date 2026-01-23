@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { findUserByCredentials } from "@/lib/users";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+import { normalizeRoleId } from "@/lib/roles";
 import { buildSessionCookie, createSessionToken } from "@/lib/session";
 
 export async function POST(request) {
@@ -12,7 +14,11 @@ export async function POST(request) {
     );
   }
 
-  const user = findUserByCredentials({ email, password });
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+  });
+
   if (!user) {
     return NextResponse.json(
       { error: "Invalid email or password." },
@@ -20,10 +26,26 @@ export async function POST(request) {
     );
   }
 
+  if (!user.isActive) {
+    return NextResponse.json(
+      { error: "User account is inactive." },
+      { status: 403 }
+    );
+  }
+
+  const matches = await bcrypt.compare(password, user.password);
+  if (!matches) {
+    return NextResponse.json(
+      { error: "Invalid email or password." },
+      { status: 401 }
+    );
+  }
+
+  const roleId = normalizeRoleId(user.role) ?? user.role;
   const token = await createSessionToken({
     email: user.email,
     name: user.name,
-    role: user.role,
+    role: roleId,
   });
 
   const response = NextResponse.json({
@@ -31,7 +53,7 @@ export async function POST(request) {
     user: {
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: roleId,
     },
   });
 

@@ -1,6 +1,6 @@
 import ActionButton from "@/components/ui/ActionButton";
 import PlaceholderUpload from "@/components/ui/PlaceholderUpload";
-import TaskBoard from "@/components/tasks/TaskBoard";
+import TaskBoardContainer from "@/components/tasks/TaskBoardContainer";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
@@ -14,17 +14,6 @@ export default async function TasksPage() {
           select: { id: true },
         })
       : null;
-
-  const tasks = hasDatabase
-    ? await prisma.task.findMany({
-        orderBy: { createdAt: "desc" },
-        include: {
-          owner: { select: { id: true, name: true, email: true, role: true } },
-          milestone: { select: { id: true, title: true, projectId: true } },
-          checklistItems: true,
-        },
-      })
-    : [];
 
   return (
     <div className="space-y-6">
@@ -51,10 +40,10 @@ export default async function TasksPage() {
         />
       </div>
 
-      <TaskBoard
-        tasks={tasks}
+      <TaskBoardContainer
         role={session?.role}
         currentUserId={currentUser?.id ?? null}
+        hasDatabase={hasDatabase}
       />
 
       <PlaceholderUpload
