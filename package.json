@@ -1,25 +1,25 @@
-
- {
+{
    "name": "pms-3",
    "version": "0.1.0",
    "private": true,
    "scripts": {
-     "dev": "next dev",
-     "build": "next build",
-     "start": "next start",
-     "lint": "eslint"
+      "dev": "next dev",
+      "build": "next build",
+      "start": "next start",
+      "lint": "eslint"
    },
    "dependencies": {
-    "@prisma/client": "^6.6.0",
-     "next": "16.1.4",
-     "react": "19.2.3",
-     "react-dom": "19.2.3"
+      "@prisma/client": "^6.6.0",
+      "bcryptjs": "^2.4.3",
+      "next": "16.1.4",
+      "react": "19.2.3",
+      "react-dom": "19.2.3"
    },
    "devDependencies": {
-     "@tailwindcss/postcss": "^4",
-     "eslint": "^9",
-     "eslint-config-next": "16.1.4",
-    "prisma": "^6.6.0",
-     "tailwindcss": "^4"
+      "@tailwindcss/postcss": "^4",
+      "eslint": "^9",
+      "eslint-config-next": "16.1.4",
+      "prisma": "^6.6.0",
+      "tailwindcss": "^4"
    }
- }
+}

@@ -52,6 +52,7 @@ model User {
   createdProjects  Project[]     @relation("ProjectCreator")
   ownedTasks       Task[]        @relation("TaskOwner")
   activityLogs     ActivityLog[]
+  statusChanges    TaskStatusHistory[] @relation("TaskStatusHistoryChangedBy")
   commentsWritten  Comment[]     @relation("CommentCreator")
   commentsReceived Comment[]     @relation("CommentRecipient")
 }
@@ -106,7 +107,7 @@ model TaskStatusHistory {
   fromStatus  TaskStatus?
   toStatus    TaskStatus
   changedById String     @db.ObjectId
-  changedBy   User       @relation(fields: [changedById], references: [id])
+  changedBy   User       @relation("TaskStatusHistoryChangedBy", fields: [changedById], references: [id])
   changedAt   DateTime   @default(now())
 }
 

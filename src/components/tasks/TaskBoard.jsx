@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ActionButton from "@/components/ui/ActionButton";
 import { useToast } from "@/components/ui/ToastProvider";
 import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
@@ -14,6 +14,10 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
   const [scope, setScope] = useState(currentUserId ? "mine" : "all");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [ownerFilter, setOwnerFilter] = useState("ALL");
+
+  useEffect(() => {
+    setTaskItems(tasks);
+  }, [tasks]);
 
   const ownerOptions = useMemo(() => {
     const owners = new Map();
