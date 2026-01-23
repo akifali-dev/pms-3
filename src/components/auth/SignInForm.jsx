@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ActionButton from "@/components/ui/ActionButton";
 import { useToast } from "@/components/ui/ToastProvider";
-import { users } from "@/lib/users";
-import { getRoleById } from "@/lib/roles";
 
 export default function SignInForm() {
   const router = useRouter();
@@ -97,25 +95,6 @@ export default function SignInForm() {
         />
       </div>
 
-      <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-          Demo accounts
-        </p>
-        <div className="mt-3 grid gap-3 text-xs text-white/70">
-          {users.map((user) => {
-            const role = getRoleById(user.role);
-            return (
-              <div key={user.email} className="rounded-xl border border-white/10 p-3">
-                <p className="text-sm font-semibold text-white">
-                  {role?.label ?? user.role}
-                </p>
-                <p>{user.email}</p>
-                <p>Password: {user.password}</p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </form>
   );
 }

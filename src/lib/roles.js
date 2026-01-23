@@ -53,6 +53,7 @@ export const routeAccess = {
     roles.DEV,
   ],
   "/reports": [roles.CEO, roles.PM, roles.CTO],
+  "/users": [roles.CEO, roles.PM, roles.CTO],
 };
 
 export const taskPermissions = {
@@ -80,12 +81,39 @@ export const taskPermissions = {
 
 export const allRoles = roleOptions.map((role) => role.id);
 
+export function normalizeRoleId(roleId) {
+  if (!roleId) {
+    return null;
+  }
+
+  const normalized = roleId
+    .toString()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_")
+    .toUpperCase();
+
+  const mapping = {
+    CEO: roles.CEO,
+    PM: roles.PM,
+    CTO: roles.CTO,
+    SENIOR_DEV: roles.SENIOR_DEV,
+    SENIOR_DEVELOPER: roles.SENIOR_DEV,
+    DEVELOPER: roles.DEV,
+    DEV: roles.DEV,
+  };
+
+  return mapping[normalized] ?? null;
+}
+
 export function getRoleById(roleId) {
-  return roleOptions.find((role) => role.id === roleId) ?? null;
+  const normalized = normalizeRoleId(roleId) ?? roleId;
+  return roleOptions.find((role) => role.id === normalized) ?? null;
 }
 
 export function roleHasRouteAccess(roleId, pathname) {
-  if (!roleId) {
+  const normalized = normalizeRoleId(roleId);
+  if (!normalized) {
     return false;
   }
 
@@ -97,21 +125,24 @@ export function roleHasRouteAccess(roleId, pathname) {
     return true;
   }
 
-  return routeAccess[matchingRoute].includes(roleId);
+  return routeAccess[matchingRoute].includes(normalized);
 }
 
 export function getDefaultRouteForRole(roleId) {
+  const normalized = normalizeRoleId(roleId);
   const allowedRoutes = Object.entries(routeAccess)
-    .filter(([, roles]) => roles.includes(roleId))
+    .filter(([, roles]) => roles.includes(normalized))
     .map(([route]) => route);
 
   return allowedRoutes[0] ?? "/dashboard";
 }
 
 export function canMoveTask(roleId) {
-  return taskPermissions[roleId]?.canMoveTask ?? false;
+  const normalized = normalizeRoleId(roleId);
+  return taskPermissions[normalized]?.canMoveTask ?? false;
 }
 
 export function canMarkTaskDone(roleId) {
-  return taskPermissions[roleId]?.canMarkDone ?? false;
+  const normalized = normalizeRoleId(roleId);
+  return taskPermissions[normalized]?.canMarkDone ?? false;
 }
