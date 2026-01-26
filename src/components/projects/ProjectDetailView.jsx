@@ -6,29 +6,13 @@ import Link from "next/link";
 import ActionButton from "@/components/ui/ActionButton";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/ToastProvider";
-
-const dayMs = 1000 * 60 * 60 * 24;
-
-const normalizeDate = (value) => {
-  if (!value) return null;
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
-};
+import MilestoneCard from "@/components/milestones/MilestoneCard";
 
 const formatDateInput = (value) => {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().split("T")[0];
-};
-
-const getDurationDays = (startDate, endDate) => {
-  if (!startDate || !endDate) return null;
-  const start = normalizeDate(startDate);
-  const end = normalizeDate(endDate);
-  if (!start || !end || end < start) return null;
-  return Math.floor((end - start) / dayMs) + 1;
 };
 
 const buildErrorMessage = (data) =>
@@ -206,33 +190,13 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
             </div>
             {milestones.length ? (
               <div className="grid gap-4 lg:grid-cols-2">
-                {milestones.map((milestone) => {
-                  const duration = getDurationDays(
-                    milestone.startDate,
-                    milestone.endDate
-                  );
-                  return (
-                    <div
-                      key={milestone.id}
-                      className="rounded-2xl border border-white/10 bg-slate-900/60 p-5"
-                    >
-                      <p className="text-sm font-semibold text-white">
-                        {milestone.title}
-                      </p>
-                      <p className="mt-2 text-xs text-white/60">
-                        {milestone.startDate && milestone.endDate
-                          ? `${milestone.startDate} → ${milestone.endDate}`
-                          : "Add start and end dates"}
-                      </p>
-                      <div className="mt-3 text-xs text-white/60">
-                        Duration:{" "}
-                        <span className="text-white">
-                          {duration ?? "--"} days
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+                {milestones.map((milestone) => (
+                  <MilestoneCard
+                    key={milestone.id}
+                    milestone={milestone}
+                    href={`/milestones/${milestone.id}`}
+                  />
+                ))}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-6 text-center text-sm text-white/60">
