@@ -4,8 +4,10 @@ import {
   buildError,
   buildSuccess,
   ensureAuthenticated,
+  ensureRole,
   getAuthContext,
   isAdminRole,
+  PROJECT_MANAGEMENT_ROLES,
 } from "@/lib/api";
 
 async function getProjectWithAccess(projectId) {
@@ -55,11 +57,16 @@ export async function GET(request, { params }) {
   return buildSuccess("Project loaded.", { project });
 }
 
-export async function PATCH(request, { params }) {
+async function handleProjectUpdate(request, { params }) {
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
+  }
+
+  const roleError = ensureRole(context.role, PROJECT_MANAGEMENT_ROLES);
+  if (roleError) {
+    return roleError;
   }
 
   const projectId = params?.id;
@@ -100,6 +107,14 @@ export async function PATCH(request, { params }) {
   });
 
   return buildSuccess("Project updated.", { project: updated });
+}
+
+export async function PUT(request, context) {
+  return handleProjectUpdate(request, context);
+}
+
+export async function PATCH(request, context) {
+  return handleProjectUpdate(request, context);
 }
 
 export async function DELETE(request, { params }) {

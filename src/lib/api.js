@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
 export const ADMIN_ROLES = ["CEO", "PM", "CTO", "SENIOR_DEVELOPER"];
+export const PROJECT_MANAGEMENT_ROLES = ["CEO", "PM", "CTO"];
 export const USER_CREATION_ROLES = ["CEO", "PM", "CTO"];
 export const ALL_ROLES = [...ADMIN_ROLES, "DEVELOPER"];
 
