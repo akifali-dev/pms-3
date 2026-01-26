@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 
 async function getProjectWithAccess(projectId) {
+
   return prisma.project.findUnique({
     where: { id: projectId },
     include: {
@@ -34,13 +35,15 @@ function canAccessProject(context, project) {
 }
 
 export async function GET(request, { params }) {
-  const context = await getAuthContext();
+  const {id:projectId}= await params;
+    const context = await getAuthContext();
+
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const projectId = params?.id;
+
   if (!projectId) {
     return buildError("Project id is required.", 400);
   }
@@ -68,8 +71,7 @@ async function handleProjectUpdate(request, { params }) {
   if (roleError) {
     return roleError;
   }
-
-  const projectId = params?.id;
+  const {id:projectId}= await params;
   if (!projectId) {
     return buildError("Project id is required.", 400);
   }
@@ -124,7 +126,7 @@ export async function DELETE(request, { params }) {
     return authError;
   }
 
-  const projectId = params?.id;
+  const {id:projectId}= await params;
   if (!projectId) {
     return buildError("Project id is required.", 400);
   }

@@ -35,12 +35,13 @@ function canAccessMilestone(context, milestone) {
 
 export async function GET(request, { params }) {
   const context = await getAuthContext();
+  const {id:milestoneId}= await params
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const milestoneId = params?.id;
+
   if (!milestoneId) {
     return buildError("Milestone id is required.", 400);
   }
@@ -59,12 +60,13 @@ export async function GET(request, { params }) {
 
 export async function PATCH(request, { params }) {
   const context = await getAuthContext();
+    const {id:milestoneId}= await params;
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const milestoneId = params?.id;
+ 
   if (!milestoneId) {
     return buildError("Milestone id is required.", 400);
   }
@@ -114,6 +116,7 @@ export async function PATCH(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const context = await getAuthContext();
+    const {id:milestoneId}= await params
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
@@ -124,7 +127,6 @@ export async function DELETE(request, { params }) {
     return roleError;
   }
 
-  const milestoneId = params?.id;
   if (!milestoneId) {
     return buildError("Milestone id is required.", 400);
   }

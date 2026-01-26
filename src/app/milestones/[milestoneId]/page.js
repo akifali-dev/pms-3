@@ -1,5 +1,8 @@
 import MilestoneDetailView from "@/components/milestones/MilestoneDetailView";
 
-export default function MilestoneDetailPage({ params }) {
-  return <MilestoneDetailView milestoneId={params.milestoneId} />;
+export default async function MilestoneDetailPage({ params }) {
+  console.log("params",params)
+    const {milestoneId}= await params;
+    console.log("milestoneId",milestoneId)
+  return <MilestoneDetailView milestoneId={milestoneId} />;
 }
