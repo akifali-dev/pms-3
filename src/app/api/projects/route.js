@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import {
-  ADMIN_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
   ensureRole,
   getAuthContext,
   isAdminRole,
+  PROJECT_MANAGEMENT_ROLES,
 } from "@/lib/api";
 
 export async function GET(request) {
@@ -48,7 +48,7 @@ export async function POST(request) {
     return authError;
   }
 
-  const roleError = ensureRole(context.role, ADMIN_ROLES);
+  const roleError = ensureRole(context.role, PROJECT_MANAGEMENT_ROLES);
   if (roleError) {
     return roleError;
   }
