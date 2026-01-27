@@ -39,13 +39,15 @@ function canAccessTask(context, task) {
 }
 
 export async function GET(request, { params }) {
+    const {id : taskId} = await params;
+
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const taskId = params?.id;
+ 
   if (!taskId) {
     return buildError("Task id is required.", 400);
   }
@@ -63,13 +65,15 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
+  const {id : taskId} = await params;
+
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const taskId = params?.id;
+ 
   if (!taskId) {
     return buildError("Task id is required.", 400);
   }
@@ -233,7 +237,9 @@ export async function PATCH(request, { params }) {
   return buildSuccess("Task updated.", { task: updated });
 }
 
+
 export async function DELETE(request, { params }) {
+    const {id : taskId} = await params;
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
@@ -246,7 +252,7 @@ export async function DELETE(request, { params }) {
     return roleError;
   }
 
-  const taskId = params?.id;
+
   if (!taskId) {
     return buildError("Task id is required.", 400);
   }
