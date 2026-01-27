@@ -58,6 +58,7 @@ export async function GET(request) {
       },
       checklistItems: true,
       statusHistory: true,
+      activityLogs: true,
     },
   });
 
@@ -158,6 +159,7 @@ export async function POST(request) {
         },
         checklistItems: true,
         statusHistory: true,
+        activityLogs: true,
       },
     });
 
@@ -199,6 +201,7 @@ export async function POST(request) {
         },
         checklistItems: true,
         statusHistory: true,
+        activityLogs: true,
       },
     });
   });

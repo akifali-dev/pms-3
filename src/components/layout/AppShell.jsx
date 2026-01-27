@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { getRoleById } from "@/lib/roles";
 import AccessDeniedToast from "@/components/layout/AccessDeniedToast";
 import { useToast } from "@/components/ui/ToastProvider";
+import useOutsideClick from "@/hooks/useOutsideClick";
 
 const SIDEBAR_STATE_KEY = "pms.sidebar.collapsed";
 
@@ -14,6 +15,8 @@ export default function AppShell({ children, session }) {
   const router = useRouter();
   const { addToast } = useToast();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef(null);
   const role = getRoleById(session?.role);
   const roleLabel = role?.label ?? "Guest";
   const userName = session?.name ?? "Guest";
@@ -30,6 +33,8 @@ export default function AppShell({ children, session }) {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SIDEBAR_STATE_KEY, String(isCollapsed));
   }, [isCollapsed]);
+
+  useOutsideClick(profileRef, () => setIsProfileOpen(false), isProfileOpen);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -89,40 +94,52 @@ export default function AppShell({ children, session }) {
               />
             </svg>
           </button>
-          <details className="relative">
-            <summary className="list-none">
-              <span className="flex cursor-pointer items-center gap-3 rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-left transition hover:border-[color:var(--color-accent)]">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-muted-bg)] text-sm font-semibold text-[color:var(--color-text)]">
-                  {userName.charAt(0).toUpperCase()}
-                </span>
-                <span className="hidden flex-col sm:flex">
-                  <span className="text-sm font-semibold">{userName}</span>
-                  <span className="text-xs text-[color:var(--color-text-subtle)]">
-                    {roleLabel}
-                  </span>
+          <div className="relative" ref={profileRef}>
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen((prev) => !prev)}
+              className="flex cursor-pointer items-center gap-3 rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-left transition hover:border-[color:var(--color-accent)]"
+              aria-expanded={isProfileOpen}
+              aria-haspopup="menu"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-muted-bg)] text-sm font-semibold text-[color:var(--color-text)]">
+                {userName.charAt(0).toUpperCase()}
+              </span>
+              <span className="hidden flex-col sm:flex">
+                <span className="text-sm font-semibold">{userName}</span>
+                <span className="text-xs text-[color:var(--color-text-subtle)]">
+                  {roleLabel}
                 </span>
               </span>
-            </summary>
-            <div className="absolute right-0 mt-3 w-48 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-sm shadow-xl">
-              {session ? (
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[color:var(--color-text)] transition hover:bg-[color:var(--color-muted-bg)]"
-                >
-                  Sign out
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => router.push("/auth/sign-in")}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[color:var(--color-text)] transition hover:bg-[color:var(--color-muted-bg)]"
-                >
-                  Sign in
-                </button>
-              )}
-            </div>
-          </details>
+            </button>
+            {isProfileOpen ? (
+              <div className="absolute right-0 mt-3 w-48 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-sm shadow-xl">
+                {session ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      handleLogout();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[color:var(--color-text)] transition hover:bg-[color:var(--color-muted-bg)]"
+                  >
+                    Sign out
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      router.push("/auth/sign-in");
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[color:var(--color-text)] transition hover:bg-[color:var(--color-muted-bg)]"
+                  >
+                    Sign in
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 
