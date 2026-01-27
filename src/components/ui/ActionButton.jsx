@@ -4,9 +4,9 @@ import { useToast } from "./ToastProvider";
 
 const variants = {
   primary:
-    "bg-slate-900 text-white shadow-sm hover:bg-slate-800 focus-visible:outline-slate-200",
+    "bg-[color:var(--button-primary-bg)] text-[color:var(--button-primary-text)] shadow-sm hover:bg-[color:var(--button-primary-hover)] focus-visible:outline-[color:var(--color-accent)]",
   secondary:
-    "border border-slate-200/15 bg-transparent text-white/80 hover:border-white/40",
+    "border border-[color:var(--button-secondary-border)] bg-transparent text-[color:var(--button-secondary-text)] hover:bg-[color:var(--button-secondary-hover)]",
   success: "bg-emerald-500/90 text-white hover:bg-emerald-400",
   warning: "bg-amber-500/90 text-slate-900 hover:bg-amber-400",
   info: "bg-sky-500/90 text-white hover:bg-sky-400",

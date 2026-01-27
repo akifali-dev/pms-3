@@ -221,7 +221,7 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
       }
 
       return (
-        <p className="text-xs text-white/50">
+        <p className="text-xs text-[color:var(--color-text-subtle)]">
           Awaiting PM/CTO approval for testing.
         </p>
       );
@@ -234,7 +234,7 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
     if (task.status === "REJECTED") {
       if (!canMoveTask(role)) {
         return (
-          <p className="text-xs text-white/50">
+          <p className="text-xs text-[color:var(--color-text-subtle)]">
             Rework required before resubmission.
           </p>
         );
@@ -253,7 +253,7 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
 
     if (!canMoveTask(role)) {
       return (
-        <p className="text-xs text-white/50">
+        <p className="text-xs text-[color:var(--color-text-subtle)]">
           You do not have permission to move this task.
         </p>
       );
@@ -263,7 +263,7 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
 
     if (task.status === "DEV_TEST" && !isChecklistComplete(task)) {
       return (
-        <p className="text-xs text-amber-200">
+        <p className="text-xs text-amber-500">
           Complete the checklist before moving to testing.
         </p>
       );
@@ -282,8 +282,8 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/40">
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
           Filters
         </div>
         <div className="flex flex-wrap gap-2">
@@ -291,8 +291,8 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
             type="button"
             className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
               scope === "mine"
-                ? "border-white/60 bg-white/10 text-white"
-                : "border-white/10 text-white/60 hover:border-white/30"
+                ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent)]"
+                : "border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:border-[color:var(--color-accent)]"
             }`}
             onClick={() => setScope("mine")}
           >
@@ -302,18 +302,18 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
             type="button"
             className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
               scope === "all"
-                ? "border-white/60 bg-white/10 text-white"
-                : "border-white/10 text-white/60 hover:border-white/30"
+                ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent)]"
+                : "border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:border-[color:var(--color-accent)]"
             }`}
             onClick={() => setScope("all")}
           >
             All Tasks
           </button>
         </div>
-        <label className="flex items-center gap-2 text-xs text-white/70">
+        <label className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
           Status
           <select
-            className="rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-white"
+            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-xs text-[color:var(--color-text)]"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
           >
@@ -325,10 +325,10 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-xs text-white/70">
+        <label className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
           Owner
           <select
-            className="rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-white"
+            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-xs text-[color:var(--color-text)]"
             value={ownerFilter}
             onChange={(event) => setOwnerFilter(event.target.value)}
           >
@@ -346,9 +346,9 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
         {TASK_STATUSES.map((status) => (
           <div
             key={status.id}
-            className={`min-w-[240px] flex-1 space-y-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4 transition ${
+            className={`min-w-[240px] flex-1 space-y-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 transition ${
               dragOverStatus === status.id
-                ? "border-white/40 bg-slate-900/70"
+                ? "border-[color:var(--color-accent)] bg-[color:var(--color-card)]"
                 : ""
             }`}
             onDragOver={(event) => {
@@ -359,10 +359,10 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
             onDrop={(event) => handleDrop(event, status.id)}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">
+              <h3 className="text-sm font-semibold text-[color:var(--color-text)]">
                 {status.label}
               </h3>
-              <span className="rounded-full border border-white/10 px-2 py-1 text-xs text-white/60">
+              <span className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)]">
                 {groupedTasks[status.id]?.length ?? 0}
               </span>
             </div>
@@ -370,40 +370,40 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
               {(groupedTasks[status.id] ?? []).map((task) => (
                 <div
                   key={task.id}
-                  className={`rounded-xl border border-white/10 bg-slate-900/70 p-4 ${
+                  className={`rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4 ${
                     pendingTaskId === task.id ? "opacity-60" : ""
                   } ${draggingTaskId === task.id ? "opacity-70" : ""}`}
                   draggable={canMoveTask(role)}
                   onDragStart={(event) => handleDragStart(event, task)}
                   onDragEnd={handleDragEnd}
                 >
-                  <p className="text-sm font-semibold text-white">
+                  <p className="text-sm font-semibold text-[color:var(--color-text)]">
                     {task.title}
                   </p>
-                  <p className="mt-1 text-xs text-white/60">
+                  <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                     Owner: {task.owner?.name ?? "Unassigned"}
                   </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/50">
-                    <span className="rounded-full border border-white/10 px-2 py-0.5">
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-text-subtle)]">
+                    <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5">
                       Time {formatDuration(task.totalTimeSpent)}
                     </span>
                     {task.reworkCount > 0 && (
-                      <span className="rounded-full border border-amber-300/40 px-2 py-0.5 text-amber-200">
+                      <span className="rounded-full border border-amber-300/40 px-2 py-0.5 text-amber-500">
                         Rework {task.reworkCount}
                       </span>
                     )}
                     {pendingTaskId === task.id && (
-                      <span className="rounded-full border border-sky-200/40 px-2 py-0.5 text-sky-200">
+                      <span className="rounded-full border border-sky-300/40 px-2 py-0.5 text-sky-500">
                         Updating...
                       </span>
                     )}
                   </div>
                   <div className="mt-3 flex flex-col gap-3">
-                    <span className="w-fit rounded-full border border-white/10 px-3 py-1 text-xs text-white/60">
+                    <span className="w-fit rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs text-[color:var(--color-text-muted)]">
                       {getStatusLabel(task.status)}
                     </span>
-                    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-                      <div className="flex items-center justify-between text-xs text-white/60">
+                    <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-3">
+                      <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
                         <span className="font-semibold uppercase tracking-[0.2em]">
                           Checklist
                         </span>
@@ -421,7 +421,7 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                             return (
                               <li
                                 key={item.id}
-                                className={`flex items-start gap-2 text-xs text-white/70 ${
+                                className={`flex items-start gap-2 text-xs text-[color:var(--color-text-muted)] ${
                                   isUpdating ? "opacity-60" : ""
                                 }`}
                               >
@@ -436,12 +436,12 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                                       event.target.checked
                                     )
                                   }
-                                  className="mt-0.5 h-4 w-4 rounded border-white/30 bg-transparent text-emerald-400"
+                                  className="mt-0.5 h-4 w-4 rounded border-[color:var(--color-border)] bg-transparent text-emerald-500"
                                 />
                                 <span
                                   className={
                                     item.isCompleted
-                                      ? "line-through text-white/40"
+                                      ? "line-through text-[color:var(--color-text-subtle)]"
                                       : ""
                                   }
                                 >
@@ -452,13 +452,13 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                           })}
                         </ul>
                       ) : (
-                        <p className="mt-2 text-xs text-white/40">
+                        <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
                           No checklist items assigned.
                         </p>
                       )}
                       {task.status === "TESTING" &&
                         canMarkTaskDone(role) && (
-                        <p className="mt-3 text-xs text-sky-200">
+                        <p className="mt-3 text-xs text-sky-500">
                           PM review checklist for testing sign-off.
                         </p>
                       )}
@@ -468,7 +468,9 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                 </div>
               ))}
               {(groupedTasks[status.id] ?? []).length === 0 && (
-                <p className="text-xs text-white/40">No tasks here.</p>
+                <p className="text-xs text-[color:var(--color-text-subtle)]">
+                  No tasks here.
+                </p>
               )}
             </div>
           </div>

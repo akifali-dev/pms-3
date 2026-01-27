@@ -27,15 +27,19 @@ export default function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
       <div
-        className="absolute inset-0 bg-slate-950/70 backdrop-blur"
+        className="absolute inset-0 bg-[color:var(--color-overlay)] backdrop-blur"
         onClick={onClose}
         role="presentation"
       />
-      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950 p-6 shadow-2xl">
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 shadow-2xl">
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-white">{title}</h3>
+          <h3 className="text-lg font-semibold text-[color:var(--color-text)]">
+            {title}
+          </h3>
           {description ? (
-            <p className="text-sm text-white/60">{description}</p>
+            <p className="text-sm text-[color:var(--color-text-muted)]">
+              {description}
+            </p>
           ) : null}
         </div>
         <div className="mt-6">{children}</div>

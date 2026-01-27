@@ -6,6 +6,7 @@ import Modal from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/ToastProvider";
 import MilestoneCard from "@/components/milestones/MilestoneCard";
 import TaskBoard from "@/components/tasks/TaskBoard";
+import PageHeader from "@/components/layout/PageHeader";
 import { TASK_STATUSES } from "@/lib/kanban";
 import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
 
@@ -130,33 +131,33 @@ export default function MilestoneDetailView({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-            Milestone detail
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
-            {milestone?.title ?? "Milestone overview"}
-          </h2>
-          <p className="mt-2 text-sm text-white/60">
-            Track execution progress and milestone-specific tasks.
-          </p>
-        </div>
-        <ActionButton
-          label="Create Task"
-          variant="primary"
-          onClick={() => setIsModalOpen(true)}
-        />
-      </div>
+      <PageHeader
+        eyebrow="Milestone detail"
+        title={milestone?.title ?? "Milestone overview"}
+        subtitle="Track execution progress and milestone-specific tasks."
+        backHref={
+          milestone?.project?.id
+            ? `/projects/${milestone.project.id}`
+            : "/milestones"
+        }
+        backLabel="Back to milestones"
+        actions={
+          <ActionButton
+            label="Create task"
+            variant="success"
+            onClick={() => setIsModalOpen(true)}
+          />
+        }
+      />
 
       {status.loading && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 text-sm text-[color:var(--color-text-muted)]">
           Loading milestone...
         </div>
       )}
 
       {!status.loading && status.error && (
-        <div className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-sm text-rose-100">
+        <div className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-sm text-rose-200">
           <p>{status.error}</p>
           <ActionButton label="Retry" variant="secondary" onClick={loadMilestone} />
         </div>
@@ -166,12 +167,14 @@ export default function MilestoneDetailView({
         <>
           <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
             <MilestoneCard milestone={milestone} />
-            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-              <p className="text-sm font-semibold text-white">Project</p>
-              <p className="mt-2 text-sm text-white/70">
+            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+              <p className="text-sm font-semibold text-[color:var(--color-text)]">
+                Project
+              </p>
+              <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
                 {milestone.project?.name ?? "Project details unavailable"}
               </p>
-              <p className="mt-2 text-xs text-white/50">
+              <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
                 Linked project ID: {milestone.project?.id ?? "--"}
               </p>
             </div>
@@ -179,8 +182,10 @@ export default function MilestoneDetailView({
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-white">Task board</p>
-              <span className="text-xs text-white/60">
+              <p className="text-sm font-semibold text-[color:var(--color-text)]">
+                Task board
+              </p>
+              <span className="text-xs text-[color:var(--color-text-muted)]">
                 {tasks.length} total
               </span>
             </div>
@@ -191,7 +196,7 @@ export default function MilestoneDetailView({
                 currentUserId={currentUserId}
               />
             ) : (
-              <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-6 text-center text-sm text-white/60">
+              <div className="rounded-2xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
                 No tasks yet.
               </div>
             )}
@@ -206,20 +211,20 @@ export default function MilestoneDetailView({
         onClose={savingTask ? undefined : () => setIsModalOpen(false)}
       >
         <form onSubmit={handleTaskSubmit} className="space-y-4">
-          <label className="text-xs text-white/60">
+          <label className="text-xs text-[color:var(--color-text-muted)]">
             Task title
             <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
               value={taskForm.title}
               onChange={(event) =>
                 setTaskForm((prev) => ({ ...prev, title: event.target.value }))
               }
             />
           </label>
-          <label className="text-xs text-white/60">
+          <label className="text-xs text-[color:var(--color-text-muted)]">
             Description
             <textarea
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
               rows={4}
               value={taskForm.description}
               onChange={(event) =>
@@ -231,10 +236,10 @@ export default function MilestoneDetailView({
             />
           </label>
           <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-xs text-white/60">
+            <label className="text-xs text-[color:var(--color-text-muted)]">
               Status
               <select
-                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
                 value={taskForm.status}
                 onChange={(event) =>
                   setTaskForm((prev) => ({
@@ -250,10 +255,10 @@ export default function MilestoneDetailView({
                 ))}
               </select>
             </label>
-            <label className="text-xs text-white/60">
+            <label className="text-xs text-[color:var(--color-text-muted)]">
               Type
               <select
-                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
                 value={taskForm.type}
                 onChange={(event) =>
                   setTaskForm((prev) => ({

@@ -34,24 +34,31 @@ export default function MilestoneCard({ milestone, href, className = "" }) {
 
   const content = (
     <div
-      className={`relative rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:border-white/30 ${className}`}
+      className={`relative rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 transition hover:border-[color:var(--color-accent)] ${className}`}
     >
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
         {getRemainingLabel(remainingDays)}
       </p>
-      <p className="mt-2 text-sm font-semibold text-white">{milestone.title}</p>
+      <p className="mt-2 text-sm font-semibold text-[color:var(--color-text)]">
+        {milestone.title}
+      </p>
       <div className="mt-4 space-y-2">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--color-muted-bg)]">
           <div
             className={`h-full ${getProgressColor(remainingPercentage)}`}
             style={{ width: `${elapsedPercentage}%` }}
           />
         </div>
       </div>
-      <p className="mt-3 text-xs text-white/60">{dateLabel}</p>
+      <p className="mt-3 text-xs text-[color:var(--color-text-muted)]">
+        {dateLabel}
+      </p>
       {milestone.project?.name ? (
-        <p className="mt-2 text-xs text-white/50">
-          Project: <span className="text-white/70">{milestone.project.name}</span>
+        <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
+          Project:{" "}
+          <span className="text-[color:var(--color-text-muted)]">
+            {milestone.project.name}
+          </span>
         </p>
       ) : null}
     </div>

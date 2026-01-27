@@ -7,6 +7,7 @@ import ActionButton from "@/components/ui/ActionButton";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/ToastProvider";
 import MilestoneCard from "@/components/milestones/MilestoneCard";
+import PageHeader from "@/components/layout/PageHeader";
 
 const formatDateInput = (value) => {
   if (!value) return "";
@@ -129,42 +130,30 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-            Project workspace
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
-            {project?.name ?? "Project overview"}
-          </h2>
-          <p className="mt-2 text-sm text-white/60">
-            Manage milestones and planning checkpoints for this project.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/projects"
-            className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/70"
-          >
-            Back to projects
-          </Link>
-          {canManageMilestones ? (
+      <PageHeader
+        eyebrow="Project workspace"
+        title={project?.name ?? "Project overview"}
+        subtitle="Manage milestones and planning checkpoints for this project."
+        backHref="/projects"
+        backLabel="Back to projects"
+        actions={
+          canManageMilestones ? (
             <ActionButton
               label="Create milestone"
-              variant="primary"
+              variant="success"
               onClick={() => setModalOpen(true)}
             />
-          ) : null}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       {status.loading && (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 text-sm text-[color:var(--color-text-muted)]">
           Loading project...
         </div>
       )}
       {!status.loading && status.error && (
-        <div className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-sm text-rose-100">
+        <div className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-sm text-rose-200">
           <p>{status.error}</p>
           <ActionButton label="Retry" variant="secondary" onClick={loadProject} />
         </div>
@@ -172,10 +161,12 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
 
       {!status.loading && !status.error && project ? (
         <>
-          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-white">Overview</p>
-              <p className="text-sm text-white/70">
+              <p className="text-sm font-semibold text-[color:var(--color-text)]">
+                Overview
+              </p>
+              <p className="text-sm text-[color:var(--color-text-muted)]">
                 {project.description || "Add a short summary for this project."}
               </p>
             </div>
@@ -183,8 +174,10 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-white">Milestones</p>
-              <span className="text-xs text-white/60">
+              <p className="text-sm font-semibold text-[color:var(--color-text)]">
+                Milestones
+              </p>
+              <span className="text-xs text-[color:var(--color-text-muted)]">
                 {milestones.length} total
               </span>
             </div>
@@ -199,7 +192,7 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
                 ))}
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-6 text-center text-sm text-white/60">
+              <div className="rounded-2xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
                 Add milestones to visualize timelines for this project.
               </div>
             )}
@@ -214,10 +207,10 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
         onClose={savingMilestone ? undefined : () => setModalOpen(false)}
       >
         <form onSubmit={handleMilestoneSubmit} className="space-y-4">
-          <label className="text-xs text-white/60">
+          <label className="text-xs text-[color:var(--color-text-muted)]">
             Milestone title
             <input
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+              className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
               value={milestoneForm.title}
               onChange={(event) =>
                 setMilestoneForm((prev) => ({
@@ -228,11 +221,11 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
             />
           </label>
           <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-xs text-white/60">
+            <label className="text-xs text-[color:var(--color-text-muted)]">
               Start date
               <input
                 type="date"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
                 value={milestoneForm.startDate}
                 onChange={(event) =>
                   setMilestoneForm((prev) => ({
@@ -242,11 +235,11 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
                 }
               />
             </label>
-            <label className="text-xs text-white/60">
+            <label className="text-xs text-[color:var(--color-text-muted)]">
               End date
               <input
                 type="date"
-                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
                 value={milestoneForm.endDate}
                 onChange={(event) =>
                   setMilestoneForm((prev) => ({

@@ -92,10 +92,10 @@ export default function ProjectModal({
       onClose={isSaving ? undefined : onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <label className="text-xs text-white/60">
+        <label className="text-xs text-[color:var(--color-text-muted)]">
           Project name
           <input
-            className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+            className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
             value={formValues.name}
             onChange={(event) =>
               setFormValues((prev) => ({
@@ -105,11 +105,11 @@ export default function ProjectModal({
             }
           />
         </label>
-        <label className="text-xs text-white/60">
+        <label className="text-xs text-[color:var(--color-text-muted)]">
           Description
           <textarea
             rows={4}
-            className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+            className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
             value={formValues.description}
             onChange={(event) =>
               setFormValues((prev) => ({
