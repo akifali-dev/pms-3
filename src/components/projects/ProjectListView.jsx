@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import ActionButton from "@/components/ui/ActionButton";
 import { useToast } from "@/components/ui/ToastProvider";
 import ProjectModal from "@/components/projects/ProjectModal";
 import PageHeader from "@/components/layout/PageHeader";
+import ViewToggle from "@/components/ui/ViewToggle";
+import useOutsideClick from "@/hooks/useOutsideClick";
 
 const VIEW_PREFERENCE_KEY = "pms.projects.view";
 
@@ -22,6 +24,7 @@ const normalizeProject = (project) => ({
 
 export default function ProjectListView({ canManageProjects }) {
   const { addToast } = useToast();
+  const router = useRouter();
   const [projects, setProjects] = useState([]);
   const [status, setStatus] = useState({ loading: true, error: null });
   const [viewMode, setViewMode] = useState("grid");
@@ -88,49 +91,102 @@ export default function ProjectListView({ canManageProjects }) {
     setModalState({ open: false, mode: "create", project: null });
   };
 
-  const projectRows = useMemo(
-    () =>
-      projects.map((project) => (
-        <tr key={project.id} className="border-t border-[color:var(--color-border)] text-sm">
-          <td className="px-4 py-3 text-[color:var(--color-text)]">
-            <p className="font-semibold">{project.name}</p>
-          </td>
-          <td className="px-4 py-3 text-[color:var(--color-text-muted)]">
-            {project.description || "No description provided."}
-          </td>
-          <td className="px-4 py-3">
-            <span className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)]">
-              {project.status}
-            </span>
-          </td>
-          <td className="px-4 py-3 text-right">
-            <details className="relative inline-block">
-              <summary className="cursor-pointer rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs text-[color:var(--color-text-muted)]">
-                Actions
-              </summary>
-              <div className="absolute right-0 z-10 mt-2 w-32 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-xs text-[color:var(--color-text)] shadow-xl">
-                <Link
-                  href={`/projects/${project.id}`}
-                  className="block rounded-md px-2 py-1 text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
+  const ProjectActionMenu = ({ project }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const menuRef = useRef(null);
+
+    useOutsideClick(menuRef, () => setIsOpen(false), isOpen);
+
+    const handleView = () => {
+      setIsOpen(false);
+      router.push(`/projects/${project.id}`);
+    };
+
+    const handleEdit = () => {
+      setIsOpen(false);
+      openEditModal(project);
+    };
+
+    return (
+      <div className="relative" ref={menuRef}>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setIsOpen((prev) => !prev);
+          }}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)]"
+          aria-label="Project actions"
+          title="Project actions"
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+        >
+          <span className="text-lg leading-none">⋮</span>
+        </button>
+        {isOpen ? (
+          <div
+            className="absolute right-0 z-10 mt-2 w-40 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-xs text-[color:var(--color-text)] shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleView();
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path
+                  d="M1.5 12s4.5-7 10.5-7 10.5 7 10.5 7-4.5 7-10.5 7-10.5-7-10.5-7Z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span>View</span>
+            </button>
+            {canManageProjects ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleEdit();
+                }}
+                className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
                 >
-                  View
-                </Link>
-                {canManageProjects ? (
-                  <button
-                    type="button"
-                    className="mt-1 w-full rounded-md px-2 py-1 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
-                    onClick={() => openEditModal(project)}
-                  >
-                    Edit
-                  </button>
-                ) : null}
-              </div>
-            </details>
-          </td>
-        </tr>
-      )),
-    [projects, canManageProjects]
-  );
+                  <path
+                    d="M4 20h4l10-10-4-4L4 16v4Z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M13 7l4 4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span>Edit</span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -148,30 +204,7 @@ export default function ProjectListView({ canManageProjects }) {
           ) : null
         }
         viewToggle={
-          <div className="flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-1 text-xs text-[color:var(--color-text-muted)]">
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              className={`rounded-full px-3 py-1 transition ${
-                viewMode === "grid"
-                  ? "bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent)]"
-                  : ""
-              }`}
-            >
-              Grid
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("list")}
-              className={`rounded-full px-3 py-1 transition ${
-                viewMode === "list"
-                  ? "bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent)]"
-                  : ""
-              }`}
-            >
-              List
-            </button>
-          </div>
+          <ViewToggle value={viewMode} onChange={setViewMode} />
         }
       />
 
@@ -198,7 +231,15 @@ export default function ProjectListView({ canManageProjects }) {
             {projects.map((project) => (
               <div
                 key={project.id}
-                className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5"
+                role="button"
+                tabIndex={0}
+                onClick={() => router.push(`/projects/${project.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    router.push(`/projects/${project.id}`);
+                  }
+                }}
+                className="cursor-pointer rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 transition hover:border-[color:var(--color-accent)]"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -213,35 +254,8 @@ export default function ProjectListView({ canManageProjects }) {
                     {project.status}
                   </span>
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-2">
-                  <Link
-                    href={`/projects/${project.id}`}
-                    className="text-xs font-semibold text-emerald-500 hover:text-emerald-400"
-                  >
-                    View project →
-                  </Link>
-                  <details className="relative inline-block text-xs text-[color:var(--color-text-muted)]">
-                    <summary className="cursor-pointer rounded-full border border-[color:var(--color-border)] px-3 py-1">
-                      Actions
-                    </summary>
-                    <div className="absolute right-0 z-10 mt-2 w-32 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-xs text-[color:var(--color-text)] shadow-xl">
-                      <Link
-                        href={`/projects/${project.id}`}
-                        className="block rounded-md px-2 py-1 text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
-                      >
-                        View
-                      </Link>
-                      {canManageProjects ? (
-                        <button
-                          type="button"
-                          className="mt-1 w-full rounded-md px-2 py-1 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
-                          onClick={() => openEditModal(project)}
-                        >
-                          Edit
-                        </button>
-                      ) : null}
-                    </div>
-                  </details>
+                <div className="mt-4 flex items-center justify-end">
+                  <ProjectActionMenu project={project} />
                 </div>
               </div>
             ))}
@@ -257,7 +271,37 @@ export default function ProjectListView({ canManageProjects }) {
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>{projectRows}</tbody>
+              <tbody>
+                {projects.map((project) => (
+                  <tr
+                    key={project.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(`/projects/${project.id}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        router.push(`/projects/${project.id}`);
+                      }
+                    }}
+                    className="border-t border-[color:var(--color-border)] text-sm transition hover:bg-[color:var(--color-muted-bg)]"
+                  >
+                    <td className="px-4 py-3 text-[color:var(--color-text)]">
+                      <p className="font-semibold">{project.name}</p>
+                    </td>
+                    <td className="px-4 py-3 text-[color:var(--color-text-muted)]">
+                      {project.description || "No description provided."}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)]">
+                        {project.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <ProjectActionMenu project={project} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         )

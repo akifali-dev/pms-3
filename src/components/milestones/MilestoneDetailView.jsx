@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ActionButton from "@/components/ui/ActionButton";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/ToastProvider";
-import MilestoneCard from "@/components/milestones/MilestoneCard";
 import TaskBoard from "@/components/tasks/TaskBoard";
 import PageHeader from "@/components/layout/PageHeader";
 import { TASK_STATUSES } from "@/lib/kanban";
@@ -29,6 +28,7 @@ export default function MilestoneDetailView({
     description: "",
     status: TASK_STATUSES[0]?.id ?? "BACKLOG",
     type: Object.keys(TASK_TYPE_CHECKLISTS)[0] ?? "UI",
+    estimatedTime: "",
   });
 
   const taskTypes = useMemo(() => Object.keys(TASK_TYPE_CHECKLISTS), []);
@@ -75,7 +75,41 @@ export default function MilestoneDetailView({
       description: "",
       status: TASK_STATUSES[0]?.id ?? "BACKLOG",
       type: Object.keys(TASK_TYPE_CHECKLISTS)[0] ?? "UI",
+      estimatedTime: "",
     });
+  };
+
+  const parseEstimatedTime = (value) => {
+    if (!value) return 0;
+    const input = value.toLowerCase().trim();
+    if (!input) return 0;
+    const hourMatch = input.match(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)/);
+    const minuteMatch = input.match(
+      /(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes)/
+    );
+    let hours = 0;
+    let minutes = 0;
+    let hasMatch = false;
+    if (hourMatch) {
+      hours = Number.parseFloat(hourMatch[1]);
+      hasMatch = true;
+    }
+    if (minuteMatch) {
+      minutes = Number.parseFloat(minuteMatch[1]);
+      hasMatch = true;
+    }
+    if (!hasMatch) {
+      const numeric = Number.parseFloat(input);
+      if (Number.isFinite(numeric)) {
+        hours = numeric;
+        hasMatch = true;
+      } else {
+        return NaN;
+      }
+    }
+    return Number.isFinite(hours + minutes / 60)
+      ? Math.max(0, hours + minutes / 60)
+      : NaN;
   };
 
   const handleTaskSubmit = async (event) => {
@@ -84,6 +118,16 @@ export default function MilestoneDetailView({
       addToast({
         title: "Task details needed",
         message: "Add a title and description to continue.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    const estimatedHours = parseEstimatedTime(taskForm.estimatedTime);
+    if (!Number.isFinite(estimatedHours)) {
+      addToast({
+        title: "Estimated time invalid",
+        message: "Enter a time like 2 hours 30 minutes or 20 minutes.",
         variant: "warning",
       });
       return;
@@ -99,6 +143,7 @@ export default function MilestoneDetailView({
           description: taskForm.description,
           status: taskForm.status,
           type: taskForm.type,
+          estimatedHours,
           milestoneId,
         }),
       });
@@ -132,9 +177,8 @@ export default function MilestoneDetailView({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Milestone detail"
+        eyebrow={milestone?.project?.name ?? "Project milestones"}
         title={milestone?.title ?? "Milestone overview"}
-        subtitle="Track execution progress and milestone-specific tasks."
         backHref={
           milestone?.project?.id
             ? `/projects/${milestone.project.id}`
@@ -165,21 +209,6 @@ export default function MilestoneDetailView({
 
       {!status.loading && !status.error && milestone && (
         <>
-          <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
-            <MilestoneCard milestone={milestone} />
-            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
-              <p className="text-sm font-semibold text-[color:var(--color-text)]">
-                Project
-              </p>
-              <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
-                {milestone.project?.name ?? "Project details unavailable"}
-              </p>
-              <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
-                Linked project ID: {milestone.project?.id ?? "--"}
-              </p>
-            </div>
-          </div>
-
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-[color:var(--color-text)]">
@@ -275,6 +304,20 @@ export default function MilestoneDetailView({
               </select>
             </label>
           </div>
+          <label className="text-xs text-[color:var(--color-text-muted)]">
+            Estimated time
+            <input
+              className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+              placeholder="2 hours 30 minutes"
+              value={taskForm.estimatedTime}
+              onChange={(event) =>
+                setTaskForm((prev) => ({
+                  ...prev,
+                  estimatedTime: event.target.value,
+                }))
+              }
+            />
+          </label>
           <div className="flex flex-wrap justify-end gap-2">
             <ActionButton
               label="Cancel"

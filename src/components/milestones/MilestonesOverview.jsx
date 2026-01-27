@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { getMilestoneProgress } from "@/lib/milestoneProgress";
 import PageHeader from "@/components/layout/PageHeader";
 import Modal from "@/components/ui/Modal";
+import ViewToggle from "@/components/ui/ViewToggle";
 
 const VIEW_PREFERENCE_KEY = "pms.milestones.view";
 
@@ -203,30 +204,7 @@ export default function MilestonesOverview() {
           />
         }
         viewToggle={
-          <div className="flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-1 text-xs text-[color:var(--color-text-muted)]">
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              className={`rounded-full px-3 py-1 transition ${
-                viewMode === "grid"
-                  ? "bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent)]"
-                  : ""
-              }`}
-            >
-              Grid
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("list")}
-              className={`rounded-full px-3 py-1 transition ${
-                viewMode === "list"
-                  ? "bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent)]"
-                  : ""
-              }`}
-            >
-              List
-            </button>
-          </div>
+          <ViewToggle value={viewMode} onChange={setViewMode} />
         }
       />
 

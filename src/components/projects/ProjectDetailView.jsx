@@ -133,7 +133,9 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
       <PageHeader
         eyebrow="Project workspace"
         title={project?.name ?? "Project overview"}
-        subtitle="Manage milestones and planning checkpoints for this project."
+        subtitle={
+          project?.description || "Add a short summary for this project."
+        }
         backHref="/projects"
         backLabel="Back to projects"
         actions={
@@ -161,17 +163,6 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
 
       {!status.loading && !status.error && project ? (
         <>
-          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-[color:var(--color-text)]">
-                Overview
-              </p>
-              <p className="text-sm text-[color:var(--color-text-muted)]">
-                {project.description || "Add a short summary for this project."}
-              </p>
-            </div>
-          </div>
-
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-[color:var(--color-text)]">
