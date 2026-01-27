@@ -5,10 +5,10 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 const ToastContext = createContext(null);
 
 const variantStyles = {
-  success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
-  error: "border-rose-500/30 bg-rose-500/10 text-rose-200",
-  warning: "border-amber-500/30 bg-amber-500/10 text-amber-200",
-  info: "border-sky-500/30 bg-sky-500/10 text-sky-200",
+  success: "border-emerald-500/30 bg-emerald-500/10",
+  error: "border-rose-500/30 bg-rose-500/10",
+  warning: "border-amber-500/30 bg-amber-500/10",
+  info: "border-sky-500/30 bg-sky-500/10",
 };
 
 export function ToastProvider({ children }) {
@@ -68,13 +68,17 @@ function ToastViewport({ toasts, onDismiss }) {
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-white">{toast.title}</p>
-              <p className="text-xs text-white/70">{toast.message}</p>
+              <p className="text-sm font-semibold text-[color:var(--color-text)]">
+                {toast.title}
+              </p>
+              <p className="text-xs text-[color:var(--color-text-muted)]">
+                {toast.message}
+              </p>
             </div>
             <button
               type="button"
               onClick={() => onDismiss(toast.id)}
-              className="rounded-full border border-white/10 px-2 py-1 text-xs text-white/70 transition hover:text-white"
+              className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)] transition hover:text-[color:var(--color-text)]"
             >
               Close
             </button>

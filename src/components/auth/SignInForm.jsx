@@ -51,7 +51,7 @@ export default function SignInForm() {
 
   return (
     <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
-      <label className="grid gap-2 text-sm text-white/70">
+      <label className="grid gap-2 text-sm text-[color:var(--color-text-muted)]">
         Work email
         <input
           type="email"
@@ -59,10 +59,10 @@ export default function SignInForm() {
           value={formState.email}
           onChange={handleChange}
           placeholder="name@company.com"
-          className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+          className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
         />
       </label>
-      <label className="grid gap-2 text-sm text-white/70">
+      <label className="grid gap-2 text-sm text-[color:var(--color-text-muted)]">
         Password
         <input
           type="password"
@@ -70,7 +70,7 @@ export default function SignInForm() {
           value={formState.password}
           onChange={handleChange}
           placeholder="••••••••"
-          className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+          className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
         />
       </label>
       {status.error && (

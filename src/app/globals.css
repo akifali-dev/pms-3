@@ -1,13 +1,64 @@
 @import "tailwindcss";
 
 :root {
-  --background: #030712;
-  --foreground: #ffffff;
+  color-scheme: light;
+  --color-bg: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1f5f9;
+  --color-surface-strong: #e2e8f0;
+  --color-border: #d5dbe6;
+  --color-border-subtle: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #475569;
+  --color-text-subtle: #64748b;
+  --color-text-inverse: #f8fafc;
+  --color-header: #ffffff;
+  --color-sidebar: #ffffff;
+  --color-card: #ffffff;
+  --color-input: #ffffff;
+  --color-muted-bg: #f8fafc;
+  --color-accent: #2563eb;
+  --color-accent-muted: #dbeafe;
+  --color-overlay: rgba(15, 23, 42, 0.45);
+  --button-primary-bg: #1d4ed8;
+  --button-primary-hover: #1e40af;
+  --button-primary-text: #f8fafc;
+  --button-secondary-text: #1e293b;
+  --button-secondary-border: #cbd5f5;
+  --button-secondary-hover: rgba(37, 99, 235, 0.12);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #020617;
+  --color-surface: #0f172a;
+  --color-surface-muted: #111827;
+  --color-surface-strong: #1f2937;
+  --color-border: rgba(148, 163, 184, 0.25);
+  --color-border-subtle: rgba(148, 163, 184, 0.15);
+  --color-text: #f8fafc;
+  --color-text-muted: rgba(226, 232, 240, 0.72);
+  --color-text-subtle: rgba(226, 232, 240, 0.5);
+  --color-text-inverse: #0f172a;
+  --color-header: #0b1220;
+  --color-sidebar: #0b1220;
+  --color-card: #0f172a;
+  --color-input: #0b1220;
+  --color-muted-bg: rgba(148, 163, 184, 0.12);
+  --color-accent: #38bdf8;
+  --color-accent-muted: rgba(56, 189, 248, 0.18);
+  --color-overlay: rgba(2, 6, 23, 0.7);
+  --button-primary-bg: #1e293b;
+  --button-primary-hover: #0f172a;
+  --button-primary-text: #f8fafc;
+  --button-secondary-text: #e2e8f0;
+  --button-secondary-border: rgba(148, 163, 184, 0.35);
+  --button-secondary-hover: rgba(148, 163, 184, 0.15);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -17,8 +68,8 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-bg);
+  color: var(--color-text);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   min-height: 100vh;
 }

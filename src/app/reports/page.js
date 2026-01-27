@@ -1,4 +1,5 @@
 import ActionButton from "@/components/ui/ActionButton";
+import PageHeader from "@/components/layout/PageHeader";
 import PlaceholderUpload from "@/components/ui/PlaceholderUpload";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -97,43 +98,37 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-            Reports
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
-            Stakeholder-ready reporting
-          </h2>
-          <p className="mt-2 text-sm text-white/60">
-            Daily and weekly reports are auto-generated and email-ready.
-          </p>
-        </div>
-        <ActionButton
-          label="Generate report"
-          variant="success"
-          toast={{
-            title: "Report queued",
-            message: "Report outputs are formatted for email delivery.",
-            variant: "success",
-          }}
-        />
-      </div>
+      <PageHeader
+        eyebrow="Reports"
+        title="Stakeholder-ready reporting"
+        subtitle="Daily and weekly reports are auto-generated and email-ready."
+        actions={
+          <ActionButton
+            label="Generate report"
+            variant="success"
+            toast={{
+              title: "Report queued",
+              message: "Report outputs are formatted for email delivery.",
+              variant: "success",
+            }}
+          />
+        }
+      />
 
       <div className="space-y-4">
         {reports.map((report) => (
           <div
             key={report.title}
-            className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-5 lg:flex-row lg:items-center lg:justify-between"
+            className="flex flex-col gap-4 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 lg:flex-row lg:items-center lg:justify-between"
           >
             <div>
-              <p className="text-sm font-semibold text-white">
+              <p className="text-sm font-semibold text-[color:var(--color-text)]">
                 {report.title}
               </p>
-              <p className="mt-1 text-xs text-white/60">
+              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                 {report.cadence}
               </p>
-              <p className="mt-2 text-xs text-white/60">
+              <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
                 Audience: {report.audience}
               </p>
               <p className="mt-1 text-xs text-emerald-300">
@@ -143,7 +138,7 @@ export default async function ReportsPage() {
                 {report.sections.map((section) => (
                   <span
                     key={section}
-                    className="rounded-full border border-white/10 bg-slate-950/40 px-2 py-1 text-[11px] text-white/70"
+                    className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)]"
                   >
                     {section}
                   </span>
@@ -165,14 +160,14 @@ export default async function ReportsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 lg:col-span-2">
-          <p className="text-sm font-semibold text-white">Email preview</p>
-          <div className="mt-4 space-y-3 text-xs text-white/70">
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 lg:col-span-2">
+          <p className="text-sm font-semibold text-[color:var(--color-text)]">Email preview</p>
+          <div className="mt-4 space-y-3 text-xs text-[color:var(--color-text-muted)]">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
                 Subject
               </p>
-              <p className="mt-1 text-sm font-semibold text-white">
+              <p className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">
                 {emailPreview.subject}
               </p>
             </div>
@@ -186,15 +181,15 @@ export default async function ReportsPage() {
             <p>{emailPreview.footer}</p>
           </div>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-          <p className="text-sm font-semibold text-white">
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+          <p className="text-sm font-semibold text-[color:var(--color-text)]">
             Metrics included
           </p>
-          <ul className="mt-3 space-y-2 text-xs text-white/70">
+          <ul className="mt-3 space-y-2 text-xs text-[color:var(--color-text-muted)]">
             {metricsChecklist.map((metric) => (
               <li
                 key={metric}
-                className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2"
+                className="flex items-center justify-between rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-muted-bg)] px-3 py-2"
               >
                 <span>{metric}</span>
                 <span className="text-emerald-300">Ready</span>
@@ -205,26 +200,26 @@ export default async function ReportsPage() {
       </div>
 
       {activitySummary && (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-          <p className="text-sm font-semibold text-white">
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+          <p className="text-sm font-semibold text-[color:var(--color-text)]">
             Accountability coverage (last 7 days)
           </p>
-          <div className="mt-4 grid gap-3 text-xs text-white/70 md:grid-cols-3">
-            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-              <p className="text-white/50">Activity logs</p>
-              <p className="mt-2 text-lg font-semibold text-white">
+          <div className="mt-4 grid gap-3 text-xs text-[color:var(--color-text-muted)] md:grid-cols-3">
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-3">
+              <p className="text-[color:var(--color-text-subtle)]">Activity logs</p>
+              <p className="mt-2 text-lg font-semibold text-[color:var(--color-text)]">
                 {activitySummary.activityCount}
               </p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-              <p className="text-white/50">Manager comments</p>
-              <p className="mt-2 text-lg font-semibold text-white">
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-3">
+              <p className="text-[color:var(--color-text-subtle)]">Manager comments</p>
+              <p className="mt-2 text-lg font-semibold text-[color:var(--color-text)]">
                 {activitySummary.commentCount}
               </p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
-              <p className="text-white/50">Hours logged</p>
-              <p className="mt-2 text-lg font-semibold text-white">
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-3">
+              <p className="text-[color:var(--color-text-subtle)]">Hours logged</p>
+              <p className="mt-2 text-lg font-semibold text-[color:var(--color-text)]">
                 {activitySummary.hoursTotal}
               </p>
             </div>

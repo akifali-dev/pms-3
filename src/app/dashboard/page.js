@@ -1,4 +1,5 @@
 import ActionButton from "@/components/ui/ActionButton";
+import PageHeader from "@/components/layout/PageHeader";
 import PlaceholderUpload from "@/components/ui/PlaceholderUpload";
 import { getSession } from "@/lib/session";
 import { getRoleById, roles } from "@/lib/roles";
@@ -143,29 +144,23 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-            Dashboard
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
-            {headline.title}
-          </h2>
-          <p className="mt-2 text-sm text-white/60">
-            {headline.description}
-          </p>
-        </div>
-        <ActionButton
-          label={isDeveloper ? "Share update" : "Share snapshot"}
-          variant="primary"
-          toast={{
-            title: "Snapshot ready",
-            message:
-              "Role-based dashboard snapshots are ready for email delivery.",
-            variant: "info",
-          }}
-        />
-      </div>
+      <PageHeader
+        eyebrow="Dashboard"
+        title={headline.title}
+        subtitle={headline.description}
+        actions={
+          <ActionButton
+            label={isDeveloper ? "Share update" : "Share snapshot"}
+            variant="primary"
+            toast={{
+              title: "Snapshot ready",
+              message:
+                "Role-based dashboard snapshots are ready for email delivery.",
+              variant: "info",
+            }}
+          />
+        }
+      />
 
       {isExecutiveSummary && (
         <div className="space-y-4">
@@ -173,39 +168,39 @@ export default async function DashboardPage() {
             {executiveHighlights.map((item) => (
               <div
                 key={item.title}
-                className="rounded-2xl border border-white/10 bg-slate-900/60 p-5"
+                className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5"
               >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
                   {item.title}
                 </p>
-                <p className="mt-3 text-xl font-semibold text-white">
+                <p className="mt-3 text-xl font-semibold text-[color:var(--color-text)]">
                   {item.value}
                 </p>
-                <p className="mt-2 text-xs text-white/60">{item.detail}</p>
+                <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{item.detail}</p>
               </div>
             ))}
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-            <p className="text-sm font-semibold text-white">Key metrics</p>
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+            <p className="text-sm font-semibold text-[color:var(--color-text)]">Key metrics</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {metricDefinitions.map((metric) => (
                 <div
                   key={metric.id}
-                  className="rounded-xl border border-white/5 bg-slate-950/40 p-4"
+                  className="rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-muted-bg)] p-4"
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
                       {metric.label}
                     </p>
                     <span className="text-xs text-emerald-300">
                       {metric.trend}
                     </span>
                   </div>
-                  <p className="mt-3 text-lg font-semibold text-white">
+                  <p className="mt-3 text-lg font-semibold text-[color:var(--color-text)]">
                     {metric.value}
                   </p>
-                  <p className="mt-2 text-xs text-white/60">
+                  <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
                     {metric.detail}
                   </p>
                 </div>
@@ -217,28 +212,28 @@ export default async function DashboardPage() {
 
       {isFullVisibility && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-            <p className="text-sm font-semibold text-white">
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+            <p className="text-sm font-semibold text-[color:var(--color-text)]">
               Metrics performance
             </p>
             <div className="mt-4 grid gap-4 lg:grid-cols-3">
               {metricDefinitions.map((metric) => (
                 <div
                   key={metric.id}
-                  className="rounded-xl border border-white/5 bg-slate-950/40 p-4"
+                  className="rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-muted-bg)] p-4"
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
                       {metric.label}
                     </p>
                     <span className="text-xs text-emerald-300">
                       {metric.trend}
                     </span>
                   </div>
-                  <p className="mt-3 text-lg font-semibold text-white">
+                  <p className="mt-3 text-lg font-semibold text-[color:var(--color-text)]">
                     {metric.value}
                   </p>
-                  <p className="mt-2 text-xs text-white/60">
+                  <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
                     {metric.detail}
                   </p>
                 </div>
@@ -250,21 +245,21 @@ export default async function DashboardPage() {
             {deliveryFocus.map((item) => (
               <div
                 key={item.title}
-                className="rounded-2xl border border-white/10 bg-slate-900/60 p-5"
+                className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5"
               >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
                   {item.title}
                 </p>
-                <p className="mt-3 text-xl font-semibold text-white">
+                <p className="mt-3 text-xl font-semibold text-[color:var(--color-text)]">
                   {item.value}
                 </p>
-                <p className="mt-2 text-xs text-white/60">{item.detail}</p>
+                <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{item.detail}</p>
               </div>
             ))}
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-            <p className="text-sm font-semibold text-white">
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+            <p className="text-sm font-semibold text-[color:var(--color-text)]">
               Milestone readiness
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -288,12 +283,12 @@ export default async function DashboardPage() {
               ].map((item) => (
                 <div
                   key={item.title}
-                  className="rounded-xl border border-white/5 bg-slate-950/40 p-4"
+                  className="rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-muted-bg)] p-4"
                 >
-                  <p className="text-sm font-semibold text-white">
+                  <p className="text-sm font-semibold text-[color:var(--color-text)]">
                     {item.title}
                   </p>
-                  <p className="mt-2 text-xs text-white/60">
+                  <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
                     {item.detail}
                   </p>
                 </div>
@@ -304,13 +299,13 @@ export default async function DashboardPage() {
       )}
 
       {isDeveloper && (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold text-white">
+              <p className="text-sm font-semibold text-[color:var(--color-text)]">
                 Individual performance
               </p>
-              <p className="mt-1 text-xs text-white/60">
+              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                 Your execution metrics across active tasks and milestones.
               </p>
             </div>
@@ -329,15 +324,15 @@ export default async function DashboardPage() {
             {developerSnapshot.map((item) => (
               <div
                 key={item.title}
-                className="rounded-xl border border-white/5 bg-slate-950/40 p-4"
+                className="rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-muted-bg)] p-4"
               >
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
                   {item.title}
                 </p>
-                <p className="mt-3 text-lg font-semibold text-white">
+                <p className="mt-3 text-lg font-semibold text-[color:var(--color-text)]">
                   {item.value}
                 </p>
-                <p className="mt-2 text-xs text-white/60">{item.detail}</p>
+                <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{item.detail}</p>
               </div>
             ))}
           </div>

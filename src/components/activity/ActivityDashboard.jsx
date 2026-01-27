@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import ActionButton from "@/components/ui/ActionButton";
 import { useToast } from "@/components/ui/ToastProvider";
+import PageHeader from "@/components/layout/PageHeader";
 
 const ranges = [
   { id: "daily", label: "Daily", days: 1 },
@@ -243,76 +244,70 @@ export default function ActivityDashboard({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-            Accountability
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
-            Activity & comment timeline
-          </h2>
-          <p className="mt-2 text-sm text-white/60">
-            Track daily logs, task auto-activity, and leadership feedback.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {ranges.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setRange(item.id)}
-              className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
-                range === item.id
-                  ? "border-emerald-400/70 bg-emerald-400/10 text-emerald-200"
-                  : "border-white/10 bg-white/5 text-white/60 hover:border-white/30"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Accountability"
+        title="Activity & comment timeline"
+        subtitle="Track daily logs, task auto-activity, and leadership feedback."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {ranges.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setRange(item.id)}
+                className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+                  range === item.id
+                    ? "border-emerald-400/70 bg-emerald-400/10 text-emerald-600"
+                    : "border-[color:var(--color-border)] bg-[color:var(--color-card)] text-[color:var(--color-text-muted)] hover:border-[color:var(--color-accent)]"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-          <p className="text-sm font-semibold text-white">Range summary</p>
-          <div className="mt-4 space-y-2 text-xs text-white/70">
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+          <p className="text-sm font-semibold text-[color:var(--color-text)]">Range summary</p>
+          <div className="mt-4 space-y-2 text-xs text-[color:var(--color-text-muted)]">
             <div className="flex items-center justify-between">
               <span>Total entries</span>
-              <span className="text-white">{summary.totalEntries}</span>
+              <span className="text-[color:var(--color-text)]">{summary.totalEntries}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Manual logs</span>
-              <span className="text-white">{summary.manualLogs}</span>
+              <span className="text-[color:var(--color-text)]">{summary.manualLogs}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Task auto-logs</span>
-              <span className="text-white">{summary.taskLogs}</span>
+              <span className="text-[color:var(--color-text)]">{summary.taskLogs}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Comments shared</span>
-              <span className="text-white">{summary.comments}</span>
+              <span className="text-[color:var(--color-text)]">{summary.comments}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Hours logged</span>
-              <span className="text-white">{summary.totalHours}</span>
+              <span className="text-[color:var(--color-text)]">{summary.totalHours}</span>
             </div>
           </div>
         </div>
 
         <form
-          className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 lg:col-span-2"
+          className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 lg:col-span-2"
           onSubmit={handleSubmitLog}
         >
-          <p className="text-sm font-semibold text-white">Log manual activity</p>
+          <p className="text-sm font-semibold text-[color:var(--color-text)]">Log manual activity</p>
           <div className="mt-4 grid gap-3 lg:grid-cols-3">
-            <label className="grid gap-2 text-xs text-white/70">
+            <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
               Category
               <select
                 name="category"
                 value={logForm.category}
                 onChange={handleLogChange}
-                className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
               >
                 {manualCategories.map((category) => (
                   <option key={category.id} value={category.id}>
@@ -321,17 +316,17 @@ export default function ActivityDashboard({
                 ))}
               </select>
             </label>
-            <label className="grid gap-2 text-xs text-white/70">
+            <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
               Date
               <input
                 type="date"
                 name="date"
                 value={logForm.date}
                 onChange={handleLogChange}
-                className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
               />
             </label>
-            <label className="grid gap-2 text-xs text-white/70">
+            <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
               Hours
               <input
                 type="number"
@@ -340,11 +335,11 @@ export default function ActivityDashboard({
                 step="0.25"
                 value={logForm.hoursSpent}
                 onChange={handleLogChange}
-                className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
               />
             </label>
           </div>
-          <label className="mt-3 grid gap-2 text-xs text-white/70">
+          <label className="mt-3 grid gap-2 text-xs text-[color:var(--color-text-muted)]">
             Description
             <textarea
               name="description"
@@ -352,7 +347,7 @@ export default function ActivityDashboard({
               onChange={handleLogChange}
               rows={3}
               placeholder="Summarize what you worked on."
-              className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+              className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
             />
           </label>
           <div className="mt-4 flex flex-wrap gap-3">
@@ -368,21 +363,21 @@ export default function ActivityDashboard({
 
       {canComment && (
         <form
-          className="rounded-2xl border border-white/10 bg-slate-900/60 p-5"
+          className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5"
           onSubmit={handleSubmitComment}
         >
-          <p className="text-sm font-semibold text-white">Leadership comment</p>
-          <p className="mt-1 text-xs text-white/60">
+          <p className="text-sm font-semibold text-[color:var(--color-text)]">Leadership comment</p>
+          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
             Share guidance on a task or individual.
           </p>
           <div className="mt-4 grid gap-3 lg:grid-cols-3">
-            <label className="grid gap-2 text-xs text-white/70">
+            <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
               Target
               <select
                 name="target"
                 value={commentForm.target}
                 onChange={handleCommentChange}
-                className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
               >
                 {commentTargets.map((target) => (
                   <option key={target.id} value={target.id}>
@@ -391,13 +386,13 @@ export default function ActivityDashboard({
                 ))}
               </select>
             </label>
-            <label className="grid gap-2 text-xs text-white/70 lg:col-span-2">
+            <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)] lg:col-span-2">
               User
               <select
                 name="createdForId"
                 value={commentForm.createdForId}
                 onChange={handleCommentChange}
-                className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
               >
                 <option value="">Select user</option>
                 {users.map((user) => (
@@ -408,7 +403,7 @@ export default function ActivityDashboard({
               </select>
             </label>
           </div>
-          <label className="mt-3 grid gap-2 text-xs text-white/70">
+          <label className="mt-3 grid gap-2 text-xs text-[color:var(--color-text-muted)]">
             Comment
             <textarea
               name="message"
@@ -416,7 +411,7 @@ export default function ActivityDashboard({
               onChange={handleCommentChange}
               rows={3}
               placeholder="Share guidance, risks, or expectations."
-              className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+              className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
             />
           </label>
           <div className="mt-4 flex flex-wrap gap-3">
@@ -435,19 +430,19 @@ export default function ActivityDashboard({
         {timeline.map(({ user, entries }) => (
           <div
             key={user.id}
-            className="rounded-2xl border border-white/10 bg-slate-900/60 p-5"
+            className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-white">{user.name}</p>
-                <p className="text-xs text-white/50">{user.email}</p>
+                <p className="text-sm font-semibold text-[color:var(--color-text)]">{user.name}</p>
+                <p className="text-xs text-[color:var(--color-text-subtle)]">{user.email}</p>
               </div>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-white/60">
+              <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
                 {user.role}
               </span>
             </div>
             {entries.length === 0 ? (
-              <p className="mt-4 text-xs text-white/50">
+              <p className="mt-4 text-xs text-[color:var(--color-text-subtle)]">
                 No activity in this range.
               </p>
             ) : (
@@ -455,35 +450,35 @@ export default function ActivityDashboard({
                 {entries.map((entry) => (
                   <div
                     key={entry.id}
-                    className="rounded-xl border border-white/10 bg-slate-950/40 p-4"
+                    className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-white/50">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-subtle)]">
                       <span>{formatDateTime(entry.timestamp)}</span>
                       {entry.type === "log" ? (
-                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-white/60">
+                        <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
                           {entry.category}
                         </span>
                       ) : (
-                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-white/60">
+                        <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
                           Comment
                         </span>
                       )}
                     </div>
-                    <p className="mt-2 text-sm text-white">
+                    <p className="mt-2 text-sm text-[color:var(--color-text)]">
                       {entry.description}
                     </p>
                     {entry.task && (
-                      <p className="mt-2 text-xs text-white/60">
+                      <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
                         Task: {entry.task.title}
                       </p>
                     )}
                     {entry.type === "comment" && entry.author && (
-                      <p className="mt-2 text-xs text-white/60">
+                      <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
                         From {entry.author.name}
                       </p>
                     )}
                     {entry.type === "log" && entry.hoursSpent > 0 && (
-                      <p className="mt-2 text-xs text-white/60">
+                      <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
                         Hours: {entry.hoursSpent}
                       </p>
                     )}
@@ -496,7 +491,7 @@ export default function ActivityDashboard({
       </div>
 
       {currentUser && (
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-[color:var(--color-text-subtle)]">
           Viewing timeline as {currentUser.name}.
         </p>
       )}

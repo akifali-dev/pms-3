@@ -67,46 +67,46 @@ export default function CreateUserForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-4 rounded-2xl border border-white/10 bg-slate-900/60 p-6"
+      className="space-y-4 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6"
     >
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
           Create user
         </p>
-        <p className="mt-2 text-sm text-white/60">
+        <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
           Assign a role and set a secure password for the new account.
         </p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="text-xs text-white/60">
+        <label className="text-xs text-[color:var(--color-text-muted)]">
           Name
           <input
             name="name"
             value={formState.name}
             onChange={handleChange}
-            className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+            className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
             required
           />
         </label>
-        <label className="text-xs text-white/60">
+        <label className="text-xs text-[color:var(--color-text-muted)]">
           Email
           <input
             type="email"
             name="email"
             value={formState.email}
             onChange={handleChange}
-            className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+            className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
             required
           />
         </label>
-        <label className="text-xs text-white/60">
+        <label className="text-xs text-[color:var(--color-text-muted)]">
           Role
           <select
             name="role"
             value={formState.role}
             onChange={handleChange}
-            className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+            className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
             required
           >
             {roleOptions.map((role) => (
@@ -116,14 +116,14 @@ export default function CreateUserForm() {
             ))}
           </select>
         </label>
-        <label className="text-xs text-white/60">
+        <label className="text-xs text-[color:var(--color-text-muted)]">
           Password
           <input
             type="password"
             name="password"
             value={formState.password}
             onChange={handleChange}
-            className="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white"
+            className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
             required
           />
         </label>
