@@ -7,6 +7,7 @@ import {
   isAdminRole,
 } from "@/lib/api";
 import { getStatusLabel, isValidTransition } from "@/lib/kanban";
+import { calculateTotalTimeSpent } from "@/lib/timeLogs";
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -18,6 +19,7 @@ async function getTask(taskId) {
       },
       checklistItems: true,
       statusHistory: true,
+      timeLogs: true,
     },
   });
 }
@@ -34,28 +36,18 @@ function canAccessTask(context, task) {
   return task.ownerId === context.user.id;
 }
 
+function getActiveTimeLog(task) {
+  return task?.timeLogs?.find((log) => !log.endedAt) ?? null;
+}
+
 function getTimeUpdates(task, nextStatus) {
   const updates = {};
-  const now = new Date();
-
   if (nextStatus === "IN_PROGRESS") {
-    updates.lastStartedAt = now;
+    updates.lastStartedAt = new Date();
   }
-
-  if (task.status === "IN_PROGRESS" && nextStatus !== "IN_PROGRESS") {
-    const lastStartedAt = task.lastStartedAt
-      ? new Date(task.lastStartedAt)
-      : null;
-    if (lastStartedAt && !Number.isNaN(lastStartedAt.getTime())) {
-      const elapsedSeconds = Math.max(
-        0,
-        Math.floor((now.getTime() - lastStartedAt.getTime()) / 1000)
-      );
-      updates.totalTimeSpent = (task.totalTimeSpent ?? 0) + elapsedSeconds;
-    }
+  if (nextStatus === "TESTING") {
     updates.lastStartedAt = null;
   }
-
   return updates;
 }
 
@@ -136,6 +128,29 @@ export async function PATCH(request, { params }) {
       data: updates,
     });
 
+    const activeLog = getActiveTimeLog(task);
+    const now = new Date();
+
+    if (nextStatus === "IN_PROGRESS" && !activeLog) {
+      await tx.taskTimeLog.create({
+        data: {
+          taskId,
+          status: nextStatus,
+          startedAt: now,
+        },
+      });
+    } else if (nextStatus === "TESTING" && activeLog) {
+      await tx.taskTimeLog.update({
+        where: { id: activeLog.id },
+        data: { endedAt: now },
+      });
+    } else if (activeLog && activeLog.status !== nextStatus) {
+      await tx.taskTimeLog.update({
+        where: { id: activeLog.id },
+        data: { status: nextStatus },
+      });
+    }
+
     await tx.taskStatusHistory.create({
       data: {
         taskId,
@@ -166,9 +181,17 @@ export async function PATCH(request, { params }) {
         },
         checklistItems: true,
         statusHistory: true,
+        timeLogs: true,
       },
     });
   });
 
-  return buildSuccess("Task updated.", { task: updated });
+  const totalTimeSpent = calculateTotalTimeSpent(updated.timeLogs);
+
+  return buildSuccess("Task updated.", {
+    task: {
+      ...updated,
+      totalTimeSpent,
+    },
+  });
 }

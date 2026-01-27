@@ -8,6 +8,7 @@ import TaskBoard from "@/components/tasks/TaskBoard";
 import PageHeader from "@/components/layout/PageHeader";
 import { TASK_STATUSES } from "@/lib/kanban";
 import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
+import { roles } from "@/lib/roles";
 
 const buildErrorMessage = (data) =>
   data?.error ?? data?.message ?? "Unable to load milestone.";
@@ -23,15 +24,24 @@ export default function MilestoneDetailView({
   const [status, setStatus] = useState({ loading: true, error: null });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [users, setUsers] = useState([]);
   const [taskForm, setTaskForm] = useState({
     title: "",
     description: "",
     status: TASK_STATUSES[0]?.id ?? "BACKLOG",
     type: Object.keys(TASK_TYPE_CHECKLISTS)[0] ?? "UI",
     estimatedTime: "",
+    ownerId: "",
+    checklistItems: [],
   });
 
   const taskTypes = useMemo(() => Object.keys(TASK_TYPE_CHECKLISTS), []);
+  const canManageAssignments = useMemo(
+    () =>
+      [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV].includes(role),
+    [role]
+  );
 
   const loadMilestone = useCallback(async () => {
     setStatus({ loading: true, error: null });
@@ -69,6 +79,26 @@ export default function MilestoneDetailView({
     loadMilestone();
   }, [loadMilestone]);
 
+  useEffect(() => {
+    if (!canManageAssignments) {
+      return;
+    }
+
+    const loadUsers = async () => {
+      try {
+        const response = await fetch("/api/users?isActive=true");
+        const data = await response.json();
+        if (response.ok) {
+          setUsers(data?.users ?? []);
+        }
+      } catch (error) {
+        setUsers([]);
+      }
+    };
+
+    loadUsers();
+  }, [canManageAssignments]);
+
   const resetTaskForm = () => {
     setTaskForm({
       title: "",
@@ -76,7 +106,10 @@ export default function MilestoneDetailView({
       status: TASK_STATUSES[0]?.id ?? "BACKLOG",
       type: Object.keys(TASK_TYPE_CHECKLISTS)[0] ?? "UI",
       estimatedTime: "",
+      ownerId: "",
+      checklistItems: [],
     });
+    setEditingTaskId(null);
   };
 
   const parseEstimatedTime = (value) => {
@@ -112,6 +145,37 @@ export default function MilestoneDetailView({
       : NaN;
   };
 
+  const formatEstimatedTime = (hoursValue = 0) => {
+    const hours = Math.max(0, Number(hoursValue) || 0);
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
+    if (wholeHours > 0 && minutes > 0) {
+      return `${wholeHours}h ${minutes}m`;
+    }
+    if (wholeHours > 0) {
+      return `${wholeHours}h`;
+    }
+    return minutes > 0 ? `${minutes}m` : "";
+  };
+
+  const openEditTask = (task) => {
+    setEditingTaskId(task.id);
+    setTaskForm({
+      title: task.title ?? "",
+      description: task.description ?? "",
+      status: task.status ?? (TASK_STATUSES[0]?.id ?? "BACKLOG"),
+      type: task.type ?? (Object.keys(TASK_TYPE_CHECKLISTS)[0] ?? "UI"),
+      estimatedTime: formatEstimatedTime(task.estimatedHours ?? 0),
+      ownerId: task.ownerId ?? "",
+      checklistItems: (task.checklistItems ?? []).map((item) => ({
+        id: item.id,
+        label: item.label,
+        isCompleted: item.isCompleted,
+      })),
+    });
+    setIsModalOpen(true);
+  };
+
   const handleTaskSubmit = async (event) => {
     event.preventDefault();
     if (!taskForm.title.trim() || !taskForm.description.trim()) {
@@ -135,18 +199,33 @@ export default function MilestoneDetailView({
 
     setSavingTask(true);
     try {
-      const response = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: taskForm.title,
-          description: taskForm.description,
-          status: taskForm.status,
-          type: taskForm.type,
-          estimatedHours,
-          milestoneId,
-        }),
-      });
+      const payload = {
+        title: taskForm.title,
+        description: taskForm.description,
+        type: taskForm.type,
+        estimatedHours,
+        ownerId: taskForm.ownerId || undefined,
+      };
+
+      const response = await fetch(
+        editingTaskId ? `/api/tasks/${editingTaskId}` : "/api/tasks",
+        {
+          method: editingTaskId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            editingTaskId
+              ? {
+                  ...payload,
+                  checklistItems: taskForm.checklistItems,
+                }
+              : {
+                  ...payload,
+                  status: taskForm.status,
+                  milestoneId,
+                }
+          ),
+        }
+      );
       const data = await response.json();
 
       if (!response.ok) {
@@ -154,18 +233,30 @@ export default function MilestoneDetailView({
       }
 
       addToast({
-        title: "Task created",
-        message: "Task added to milestone execution queue.",
+        title: editingTaskId ? "Task updated" : "Task created",
+        message: editingTaskId
+          ? "Task changes have been saved."
+          : "Task added to milestone execution queue.",
         variant: "success",
       });
       resetTaskForm();
       setIsModalOpen(false);
-      loadMilestone();
+      if (editingTaskId) {
+        setTasks((prev) =>
+          prev.map((task) => (task.id === data.task.id ? data.task : task))
+        );
+      } else {
+        loadMilestone();
+      }
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unable to create task.";
+        error instanceof Error
+          ? error.message
+          : editingTaskId
+            ? "Unable to update task."
+            : "Unable to create task.";
       addToast({
-        title: "Task creation failed",
+        title: editingTaskId ? "Task update failed" : "Task creation failed",
         message,
         variant: "error",
       });
@@ -189,7 +280,10 @@ export default function MilestoneDetailView({
           <ActionButton
             label="Create task"
             variant="success"
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              resetTaskForm();
+              setIsModalOpen(true);
+            }}
           />
         }
       />
@@ -223,6 +317,7 @@ export default function MilestoneDetailView({
                 tasks={tasks}
                 role={role}
                 currentUserId={currentUserId}
+                onEditTask={openEditTask}
               />
             ) : (
               <div className="rounded-2xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
@@ -235,9 +330,20 @@ export default function MilestoneDetailView({
 
       <Modal
         isOpen={isModalOpen}
-        title="Create task"
-        description="Tasks created here are tied to this milestone."
-        onClose={savingTask ? undefined : () => setIsModalOpen(false)}
+        title={editingTaskId ? "Edit task" : "Create task"}
+        description={
+          editingTaskId
+            ? "Update the task details and checklist."
+            : "Tasks created here are tied to this milestone."
+        }
+        onClose={
+          savingTask
+            ? undefined
+            : () => {
+                setIsModalOpen(false);
+                resetTaskForm();
+              }
+        }
       >
         <form onSubmit={handleTaskSubmit} className="space-y-4">
           <label className="text-xs text-[color:var(--color-text-muted)]">
@@ -265,25 +371,27 @@ export default function MilestoneDetailView({
             />
           </label>
           <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-xs text-[color:var(--color-text-muted)]">
-              Status
-              <select
-                className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                value={taskForm.status}
-                onChange={(event) =>
-                  setTaskForm((prev) => ({
-                    ...prev,
-                    status: event.target.value,
-                  }))
-                }
-              >
-                {TASK_STATUSES.map((statusOption) => (
-                  <option key={statusOption.id} value={statusOption.id}>
-                    {statusOption.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {!editingTaskId ? (
+              <label className="text-xs text-[color:var(--color-text-muted)]">
+                Status
+                <select
+                  className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                  value={taskForm.status}
+                  onChange={(event) =>
+                    setTaskForm((prev) => ({
+                      ...prev,
+                      status: event.target.value,
+                    }))
+                  }
+                >
+                  {TASK_STATUSES.map((statusOption) => (
+                    <option key={statusOption.id} value={statusOption.id}>
+                      {statusOption.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="text-xs text-[color:var(--color-text-muted)]">
               Type
               <select
@@ -305,6 +413,29 @@ export default function MilestoneDetailView({
             </label>
           </div>
           <label className="text-xs text-[color:var(--color-text-muted)]">
+            Assignee
+            <select
+              className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+              value={taskForm.ownerId}
+              onChange={(event) =>
+                setTaskForm((prev) => ({
+                  ...prev,
+                  ownerId: event.target.value,
+                }))
+              }
+              disabled={!canManageAssignments}
+            >
+              <option value="">
+                {canManageAssignments ? "Select developer" : "Unassigned"}
+              </option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-[color:var(--color-text-muted)]">
             Estimated time
             <input
               className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
@@ -318,6 +449,94 @@ export default function MilestoneDetailView({
               }
             />
           </label>
+          {editingTaskId ? (
+            <div className="space-y-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                Checklist
+              </p>
+              <div className="space-y-2">
+                {taskForm.checklistItems.length ? (
+                  taskForm.checklistItems.map((item, index) => (
+                    <div
+                      key={item.id ?? `new-${index}`}
+                      className="flex items-center gap-2"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.isCompleted}
+                        onChange={(event) =>
+                          setTaskForm((prev) => ({
+                            ...prev,
+                            checklistItems: prev.checklistItems.map(
+                              (existing, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...existing,
+                                      isCompleted: event.target.checked,
+                                    }
+                                  : existing
+                            ),
+                          }))
+                        }
+                        className="h-4 w-4 rounded border-[color:var(--color-border)] bg-transparent text-emerald-500"
+                      />
+                      <input
+                        className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-2 py-1 text-xs text-[color:var(--color-text)]"
+                        value={item.label}
+                        onChange={(event) =>
+                          setTaskForm((prev) => ({
+                            ...prev,
+                            checklistItems: prev.checklistItems.map(
+                              (existing, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...existing,
+                                      label: event.target.value,
+                                    }
+                                  : existing
+                            ),
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[10px] text-[color:var(--color-text-muted)] transition hover:border-rose-400 hover:text-rose-300"
+                        onClick={() =>
+                          setTaskForm((prev) => ({
+                            ...prev,
+                            checklistItems: prev.checklistItems.filter(
+                              (_, itemIndex) => itemIndex !== index
+                            ),
+                          }))
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-[color:var(--color-text-subtle)]">
+                    No checklist items yet.
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="w-fit rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs text-[color:var(--color-text-muted)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)]"
+                onClick={() =>
+                  setTaskForm((prev) => ({
+                    ...prev,
+                    checklistItems: [
+                      ...prev.checklistItems,
+                      { label: "", isCompleted: false },
+                    ],
+                  }))
+                }
+              >
+                Add checklist item
+              </button>
+            </div>
+          ) : null}
           <div className="flex flex-wrap justify-end gap-2">
             <ActionButton
               label="Cancel"
@@ -326,7 +545,13 @@ export default function MilestoneDetailView({
               className={savingTask ? "pointer-events-none opacity-60" : ""}
             />
             <ActionButton
-              label={savingTask ? "Saving..." : "Create Task"}
+              label={
+                savingTask
+                  ? "Saving..."
+                  : editingTaskId
+                    ? "Save changes"
+                    : "Create Task"
+              }
               variant="primary"
               type="submit"
               className={savingTask ? "pointer-events-none opacity-60" : ""}
