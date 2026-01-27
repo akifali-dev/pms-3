@@ -32,13 +32,14 @@ function canAccessChecklistItem(context, item) {
 }
 
 export async function GET(request, { params }) {
+ const {id:itemId}= await params;
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const itemId = params?.id;
+
   if (!itemId) {
     return buildError("Checklist item id is required.", 400);
   }
@@ -59,13 +60,15 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
+    const {id:itemId}= await params;
+
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const itemId = params?.id;
+ 
   if (!itemId) {
     return buildError("Checklist item id is required.", 400);
   }
@@ -112,7 +115,9 @@ export async function PATCH(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const context = await getAuthContext();
+   const {id:itemId}= await params;
   const authError = ensureAuthenticated(context);
+  
   if (authError) {
     return authError;
   }
@@ -123,7 +128,7 @@ export async function DELETE(request, { params }) {
     return roleError;
   }
 
-  const itemId = params?.id;
+ 
   if (!itemId) {
     return buildError("Checklist item id is required.", 400);
   }
