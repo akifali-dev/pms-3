@@ -5,7 +5,7 @@ import ActionButton from "@/components/ui/ActionButton";
 import Drawer from "@/components/ui/Drawer";
 import { useToast } from "@/components/ui/ToastProvider";
 import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
-import { canMarkTaskDone, canMoveTask, roles } from "@/lib/roles";
+import { canMarkTaskDone, roles } from "@/lib/roles";
 
 const formatDurationShort = (totalSeconds = 0) => {
   const seconds = Math.max(0, Number(totalSeconds) || 0);
@@ -152,6 +152,15 @@ export default function TaskBoard({
       return;
     }
 
+    if (!canMoveTaskForTask(task)) {
+      addToast({
+        title: "Move blocked",
+        message: "You can only move tasks assigned to you.",
+        variant: "error",
+      });
+      return;
+    }
+
     setPendingTaskId(task.id);
     const response = await fetch(`/api/tasks/${task.id}/status`, {
       method: "PATCH",
@@ -230,11 +239,7 @@ export default function TaskBoard({
       return false;
     }
 
-    if (task.ownerId === currentUserId) {
-      return true;
-    }
-
-    return [roles.PM, roles.CTO, roles.SENIOR_DEV].includes(role);
+    return task.ownerId === currentUserId;
   };
 
   const canEditChecklist = (task) => {
@@ -242,16 +247,29 @@ export default function TaskBoard({
       return false;
     }
 
-    if (task.ownerId === currentUserId) {
+    return task.ownerId === currentUserId;
+  };
+
+  const canMoveTaskForTask = (task) => {
+    if (!currentUserId || !task) {
+      return false;
+    }
+
+    if ([roles.PM, roles.CTO].includes(role)) {
       return true;
     }
 
-    return [roles.PM, roles.CTO, roles.SENIOR_DEV].includes(role);
+    return task.ownerId === currentUserId;
   };
 
   const handleDragStart = (event, task) => {
-    if (!canMoveTask(role)) {
+    if (!canMoveTaskForTask(task)) {
       event.preventDefault();
+      addToast({
+        title: "Move blocked",
+        message: "You can only move tasks assigned to you.",
+        variant: "error",
+      });
       return;
     }
     event.dataTransfer.effectAllowed = "move";
@@ -271,6 +289,15 @@ export default function TaskBoard({
     setDragOverStatus(null);
 
     if (!task || task.status === statusId) {
+      return;
+    }
+
+    if (!canMoveTaskForTask(task)) {
+      addToast({
+        title: "Move blocked",
+        message: "You can only move tasks assigned to you.",
+        variant: "error",
+      });
       return;
     }
 
@@ -315,7 +342,7 @@ export default function TaskBoard({
     }
 
     if (task.status === "REJECTED") {
-      if (!canMoveTask(role)) {
+      if (!canMoveTaskForTask(task)) {
         return (
           <p className="text-xs text-[color:var(--color-text-subtle)]">
             Rework required before resubmission.
@@ -334,7 +361,7 @@ export default function TaskBoard({
       );
     }
 
-    if (!canMoveTask(role)) {
+    if (!canMoveTaskForTask(task)) {
       return (
         <p className="text-xs text-[color:var(--color-text-subtle)]">
           You do not have permission to move this task.
@@ -467,7 +494,7 @@ export default function TaskBoard({
                     className={`cursor-pointer rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-3 transition hover:border-[color:var(--color-accent)] ${
                       pendingTaskId === task.id ? "opacity-60" : ""
                     } ${draggingTaskId === task.id ? "opacity-70" : ""}`}
-                    draggable={canMoveTask(role)}
+                    draggable={Boolean(currentUserId)}
                     onDragStart={(event) => handleDragStart(event, task)}
                     onDragEnd={handleDragEnd}
                     onClick={() => setSelectedTaskId(task.id)}

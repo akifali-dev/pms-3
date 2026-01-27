@@ -15,7 +15,12 @@ async function getTask(taskId) {
     include: {
       owner: { select: { id: true, name: true, email: true, role: true } },
       milestone: {
-        select: { id: true, title: true, projectId: true },
+        select: {
+          id: true,
+          title: true,
+          projectId: true,
+          project: { select: { memberIds: true } },
+        },
       },
       checklistItems: true,
       statusHistory: true,
@@ -29,7 +34,27 @@ function canAccessTask(context, task) {
     return false;
   }
 
+  if (!task.milestone?.project?.memberIds?.includes(context.user.id)) {
+    return false;
+  }
+
   if (isAdminRole(context.role)) {
+    return true;
+  }
+
+  return task.ownerId === context.user.id;
+}
+
+function canMoveTask(context, task) {
+  if (!task) {
+    return false;
+  }
+
+  if (!task.milestone?.project?.memberIds?.includes(context.user.id)) {
+    return false;
+  }
+
+  if (["PM", "CTO"].includes(context.role)) {
     return true;
   }
 
@@ -71,6 +96,10 @@ export async function PATCH(request, { params }) {
 
   if (!canAccessTask(context, task)) {
     return buildError("You do not have permission to update this task.", 403);
+  }
+
+  if (!canMoveTask(context, task)) {
+    return buildError("You do not have permission to move this task.", 403);
   }
 
   const body = await request.json();

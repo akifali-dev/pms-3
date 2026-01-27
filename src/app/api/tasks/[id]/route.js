@@ -17,7 +17,12 @@ async function getTask(taskId) {
     include: {
       owner: { select: { id: true, name: true, email: true, role: true } },
       milestone: {
-        select: { id: true, title: true, projectId: true },
+        select: {
+          id: true,
+          title: true,
+          projectId: true,
+          project: { select: { memberIds: true } },
+        },
       },
       checklistItems: true,
       statusHistory: true,
@@ -32,8 +37,12 @@ function canAccessTask(context, task) {
     return false;
   }
 
+  if (!task.milestone?.project?.memberIds?.includes(context.user.id)) {
+    return false;
+  }
+
   if (isAdminRole(context.role)) {
-    return true;
+    return task.ownerId === context.user.id;
   }
 
   return task.ownerId === context.user.id;
@@ -102,21 +111,8 @@ export async function PATCH(request, { params }) {
   }
 
   if (body?.ownerId !== undefined) {
-    if (!isAdminRole(context.role)) {
-      if (body.ownerId && body.ownerId !== context.user.id) {
-        return buildError("You can only assign tasks to yourself.", 403);
-      }
-    } else {
-      if (body.ownerId) {
-        const owner = await prisma.user.findUnique({
-          where: { id: body.ownerId },
-          select: { id: true },
-        });
-
-        if (!owner) {
-          return buildError("Task owner not found.", 404);
-        }
-      }
+    if (body.ownerId && body.ownerId !== context.user.id) {
+      return buildError("You can only assign tasks to yourself.", 403);
     }
     updates.ownerId = body.ownerId;
   }

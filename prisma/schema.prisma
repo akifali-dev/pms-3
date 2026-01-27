@@ -50,6 +50,7 @@ model User {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   createdProjects  Project[]     @relation("ProjectCreator")
+  memberProjects   Project[]     @relation("ProjectMembers")
   ownedTasks       Task[]        @relation("TaskOwner")
   activityLogs     ActivityLog[]
   statusChanges    TaskStatusHistory[] @relation("TaskStatusHistoryChangedBy")
@@ -63,6 +64,8 @@ model Project {
   description String?
   createdById String      @db.ObjectId
   createdBy   User        @relation("ProjectCreator", fields: [createdById], references: [id])
+  memberIds   String[]    @db.ObjectId @default([])
+  members     User[]      @relation("ProjectMembers", fields: [memberIds], references: [id])
   milestones  Milestone[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt

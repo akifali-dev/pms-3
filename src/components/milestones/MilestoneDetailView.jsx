@@ -345,199 +345,201 @@ export default function MilestoneDetailView({
               }
         }
       >
-        <form onSubmit={handleTaskSubmit} className="space-y-4">
-          <label className="text-xs text-[color:var(--color-text-muted)]">
-            Task title
-            <input
-              className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-              value={taskForm.title}
-              onChange={(event) =>
-                setTaskForm((prev) => ({ ...prev, title: event.target.value }))
-              }
-            />
-          </label>
-          <label className="text-xs text-[color:var(--color-text-muted)]">
-            Description
-            <textarea
-              className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-              rows={4}
-              value={taskForm.description}
-              onChange={(event) =>
-                setTaskForm((prev) => ({
-                  ...prev,
-                  description: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <div className="grid gap-3 md:grid-cols-2">
-            {!editingTaskId ? (
+        <form onSubmit={handleTaskSubmit} className="flex max-h-[60vh] flex-col">
+          <div className="space-y-4 overflow-y-auto pr-1">
+            <label className="text-xs text-[color:var(--color-text-muted)]">
+              Task title
+              <input
+                className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                value={taskForm.title}
+                onChange={(event) =>
+                  setTaskForm((prev) => ({ ...prev, title: event.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs text-[color:var(--color-text-muted)]">
+              Description
+              <textarea
+                className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                rows={4}
+                value={taskForm.description}
+                onChange={(event) =>
+                  setTaskForm((prev) => ({
+                    ...prev,
+                    description: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              {!editingTaskId ? (
+                <label className="text-xs text-[color:var(--color-text-muted)]">
+                  Status
+                  <select
+                    className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                    value={taskForm.status}
+                    onChange={(event) =>
+                      setTaskForm((prev) => ({
+                        ...prev,
+                        status: event.target.value,
+                      }))
+                    }
+                  >
+                    {TASK_STATUSES.map((statusOption) => (
+                      <option key={statusOption.id} value={statusOption.id}>
+                        {statusOption.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label className="text-xs text-[color:var(--color-text-muted)]">
-                Status
+                Type
                 <select
                   className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                  value={taskForm.status}
+                  value={taskForm.type}
                   onChange={(event) =>
                     setTaskForm((prev) => ({
                       ...prev,
-                      status: event.target.value,
+                      type: event.target.value,
                     }))
                   }
                 >
-                  {TASK_STATUSES.map((statusOption) => (
-                    <option key={statusOption.id} value={statusOption.id}>
-                      {statusOption.label}
+                  {taskTypes.map((taskType) => (
+                    <option key={taskType} value={taskType}>
+                      {taskType}
                     </option>
                   ))}
                 </select>
               </label>
-            ) : null}
+            </div>
             <label className="text-xs text-[color:var(--color-text-muted)]">
-              Type
+              Assignee
               <select
                 className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                value={taskForm.type}
+                value={taskForm.ownerId}
                 onChange={(event) =>
                   setTaskForm((prev) => ({
                     ...prev,
-                    type: event.target.value,
+                    ownerId: event.target.value,
                   }))
                 }
+                disabled={!canManageAssignments}
               >
-                {taskTypes.map((taskType) => (
-                  <option key={taskType} value={taskType}>
-                    {taskType}
+                <option value="">
+                  {canManageAssignments ? "Select developer" : "Unassigned"}
+                </option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
                   </option>
                 ))}
               </select>
             </label>
-          </div>
-          <label className="text-xs text-[color:var(--color-text-muted)]">
-            Assignee
-            <select
-              className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-              value={taskForm.ownerId}
-              onChange={(event) =>
-                setTaskForm((prev) => ({
-                  ...prev,
-                  ownerId: event.target.value,
-                }))
-              }
-              disabled={!canManageAssignments}
-            >
-              <option value="">
-                {canManageAssignments ? "Select developer" : "Unassigned"}
-              </option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs text-[color:var(--color-text-muted)]">
-            Estimated time
-            <input
-              className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-              placeholder="2 hours 30 minutes"
-              value={taskForm.estimatedTime}
-              onChange={(event) =>
-                setTaskForm((prev) => ({
-                  ...prev,
-                  estimatedTime: event.target.value,
-                }))
-              }
-            />
-          </label>
-          {editingTaskId ? (
-            <div className="space-y-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
-                Checklist
-              </p>
-              <div className="space-y-2">
-                {taskForm.checklistItems.length ? (
-                  taskForm.checklistItems.map((item, index) => (
-                    <div
-                      key={item.id ?? `new-${index}`}
-                      className="flex items-center gap-2"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={item.isCompleted}
-                        onChange={(event) =>
-                          setTaskForm((prev) => ({
-                            ...prev,
-                            checklistItems: prev.checklistItems.map(
-                              (existing, itemIndex) =>
-                                itemIndex === index
-                                  ? {
-                                      ...existing,
-                                      isCompleted: event.target.checked,
-                                    }
-                                  : existing
-                            ),
-                          }))
-                        }
-                        className="h-4 w-4 rounded border-[color:var(--color-border)] bg-transparent text-emerald-500"
-                      />
-                      <input
-                        className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-2 py-1 text-xs text-[color:var(--color-text)]"
-                        value={item.label}
-                        onChange={(event) =>
-                          setTaskForm((prev) => ({
-                            ...prev,
-                            checklistItems: prev.checklistItems.map(
-                              (existing, itemIndex) =>
-                                itemIndex === index
-                                  ? {
-                                      ...existing,
-                                      label: event.target.value,
-                                    }
-                                  : existing
-                            ),
-                          }))
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[10px] text-[color:var(--color-text-muted)] transition hover:border-rose-400 hover:text-rose-300"
-                        onClick={() =>
-                          setTaskForm((prev) => ({
-                            ...prev,
-                            checklistItems: prev.checklistItems.filter(
-                              (_, itemIndex) => itemIndex !== index
-                            ),
-                          }))
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-[color:var(--color-text-subtle)]">
-                    No checklist items yet.
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                className="w-fit rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs text-[color:var(--color-text-muted)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)]"
-                onClick={() =>
+            <label className="text-xs text-[color:var(--color-text-muted)]">
+              Estimated time
+              <input
+                className="mt-1 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                placeholder="2 hours 30 minutes"
+                value={taskForm.estimatedTime}
+                onChange={(event) =>
                   setTaskForm((prev) => ({
                     ...prev,
-                    checklistItems: [
-                      ...prev.checklistItems,
-                      { label: "", isCompleted: false },
-                    ],
+                    estimatedTime: event.target.value,
                   }))
                 }
-              >
-                Add checklist item
-              </button>
-            </div>
-          ) : null}
-          <div className="flex flex-wrap justify-end gap-2">
+              />
+            </label>
+            {editingTaskId ? (
+              <div className="space-y-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                  Checklist
+                </p>
+                <div className="space-y-2">
+                  {taskForm.checklistItems.length ? (
+                    taskForm.checklistItems.map((item, index) => (
+                      <div
+                        key={item.id ?? `new-${index}`}
+                        className="flex items-center gap-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.isCompleted}
+                          onChange={(event) =>
+                            setTaskForm((prev) => ({
+                              ...prev,
+                              checklistItems: prev.checklistItems.map(
+                                (existing, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...existing,
+                                        isCompleted: event.target.checked,
+                                      }
+                                    : existing
+                              ),
+                            }))
+                          }
+                          className="h-4 w-4 rounded border-[color:var(--color-border)] bg-transparent text-emerald-500"
+                        />
+                        <input
+                          className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-2 py-1 text-xs text-[color:var(--color-text)]"
+                          value={item.label}
+                          onChange={(event) =>
+                            setTaskForm((prev) => ({
+                              ...prev,
+                              checklistItems: prev.checklistItems.map(
+                                (existing, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...existing,
+                                        label: event.target.value,
+                                      }
+                                    : existing
+                              ),
+                            }))
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[10px] text-[color:var(--color-text-muted)] transition hover:border-rose-400 hover:text-rose-300"
+                          onClick={() =>
+                            setTaskForm((prev) => ({
+                              ...prev,
+                              checklistItems: prev.checklistItems.filter(
+                                (_, itemIndex) => itemIndex !== index
+                              ),
+                            }))
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-[color:var(--color-text-subtle)]">
+                      No checklist items yet.
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="w-fit rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs text-[color:var(--color-text-muted)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)]"
+                  onClick={() =>
+                    setTaskForm((prev) => ({
+                      ...prev,
+                      checklistItems: [
+                        ...prev.checklistItems,
+                        { label: "", isCompleted: false },
+                      ],
+                    }))
+                  }
+                >
+                  Add checklist item
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div className="sticky bottom-0 mt-4 flex flex-wrap justify-end gap-2 border-t border-[color:var(--color-border)] bg-[color:var(--color-card)] pt-4">
             <ActionButton
               label="Cancel"
               variant="secondary"
