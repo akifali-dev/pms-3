@@ -42,8 +42,8 @@ export const routeAccess = {
     roles.SENIOR_DEV,
     roles.DEV,
   ],
-  "/projects": [roles.PM, roles.CTO, roles.SENIOR_DEV],
-  "/milestones": [roles.PM, roles.CTO, roles.SENIOR_DEV],
+  "/projects": [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV, roles.DEV],
+  "/milestones": [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV, roles.DEV],
   "/activity": [
     roles.CEO,
     roles.PM,

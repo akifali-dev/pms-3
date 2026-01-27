@@ -19,13 +19,11 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const createdById = searchParams.get("createdById");
 
-  const where = {};
-  if (isAdminRole(context.role)) {
-    if (createdById) {
-      where.createdById = createdById;
-    }
-  } else {
-    where.createdById = context.user.id;
+  const where = {
+    memberIds: { has: context.user.id },
+  };
+  if (isAdminRole(context.role) && createdById) {
+    where.createdById = createdById;
   }
 
   const projects = await prisma.project.findMany({
@@ -33,6 +31,9 @@ export async function GET(request) {
     orderBy: { createdAt: "desc" },
     include: {
       createdBy: {
+        select: { id: true, name: true, email: true, role: true },
+      },
+      members: {
         select: { id: true, name: true, email: true, role: true },
       },
     },
@@ -56,6 +57,21 @@ export async function POST(request) {
   const body = await request.json();
   const name = body?.name?.trim();
   const description = body?.description?.trim();
+  const incomingMemberIds = Array.isArray(body?.memberIds)
+    ? body.memberIds.filter(Boolean)
+    : [];
+  const uniqueMemberIds = Array.from(
+    new Set([context.user.id, ...incomingMemberIds])
+  );
+
+  if (uniqueMemberIds.length) {
+    const memberCount = await prisma.user.count({
+      where: { id: { in: uniqueMemberIds } },
+    });
+    if (memberCount !== uniqueMemberIds.length) {
+      return buildError("One or more project members were not found.", 404);
+    }
+  }
 
   if (!name) {
     return buildError("Project name is required.", 400);
@@ -66,9 +82,13 @@ export async function POST(request) {
       name,
       description: description || null,
       createdById: context.user.id,
+      memberIds: uniqueMemberIds,
     },
     include: {
       createdBy: {
+        select: { id: true, name: true, email: true, role: true },
+      },
+      members: {
         select: { id: true, name: true, email: true, role: true },
       },
     },

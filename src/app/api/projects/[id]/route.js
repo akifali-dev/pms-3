@@ -11,11 +11,13 @@ import {
 } from "@/lib/api";
 
 async function getProjectWithAccess(projectId) {
-
   return prisma.project.findUnique({
     where: { id: projectId },
     include: {
       createdBy: {
+        select: { id: true, name: true, email: true, role: true },
+      },
+      members: {
         select: { id: true, name: true, email: true, role: true },
       },
     },
@@ -28,10 +30,10 @@ function canAccessProject(context, project) {
   }
 
   if (isAdminRole(context.role)) {
-    return true;
+    return project.memberIds?.includes(context.user.id);
   }
 
-  return project.createdById === context.user.id;
+  return project.memberIds?.includes(context.user.id);
 }
 
 export async function GET(request, { params }) {
@@ -88,9 +90,26 @@ async function handleProjectUpdate(request, { params }) {
   const body = await request.json();
   const name = body?.name?.trim();
   const description = body?.description?.trim();
+  const incomingMemberIds = Array.isArray(body?.memberIds)
+    ? body.memberIds.filter(Boolean)
+    : null;
 
-  if (!name && description === undefined) {
+  if (!name && description === undefined && incomingMemberIds === null) {
     return buildError("No valid updates provided.", 400);
+  }
+
+  let memberIdsUpdate = null;
+  if (incomingMemberIds !== null) {
+    const uniqueMemberIds = Array.from(
+      new Set([project.createdById, ...incomingMemberIds])
+    );
+    const memberCount = await prisma.user.count({
+      where: { id: { in: uniqueMemberIds } },
+    });
+    if (memberCount !== uniqueMemberIds.length) {
+      return buildError("One or more project members were not found.", 404);
+    }
+    memberIdsUpdate = uniqueMemberIds;
   }
 
   const updated = await prisma.project.update({
@@ -100,9 +119,13 @@ async function handleProjectUpdate(request, { params }) {
       ...(description !== undefined
         ? { description: description || null }
         : {}),
+      ...(memberIdsUpdate ? { memberIds: memberIdsUpdate } : {}),
     },
     include: {
       createdBy: {
+        select: { id: true, name: true, email: true, role: true },
+      },
+      members: {
         select: { id: true, name: true, email: true, role: true },
       },
     },

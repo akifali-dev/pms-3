@@ -30,18 +30,27 @@ export async function GET(request) {
     return buildError("Milestone id is required.", 400);
   }
 
+  const milestone = await prisma.milestone.findUnique({
+    where: { id: milestoneId },
+    select: { id: true, project: { select: { memberIds: true } } },
+  });
+
+  if (!milestone) {
+    return buildError("Milestone not found.", 404);
+  }
+
+  if (!milestone.project.memberIds?.includes(context.user.id)) {
+    return buildError("You do not have permission to view these tasks.", 403);
+  }
+
   if (status) {
     where.status = status;
   }
 
   where.milestoneId = milestoneId;
 
-  if (isAdminRole(context.role)) {
-    if (ownerId) {
-      where.ownerId = ownerId;
-    }
-  } else {
-    where.ownerId = context.user.id;
+  if (ownerId) {
+    where.ownerId = ownerId;
   }
 
   const tasks = await prisma.task.findMany({
@@ -117,11 +126,15 @@ export async function POST(request) {
 
   const milestone = await prisma.milestone.findUnique({
     where: { id: milestoneId },
-    select: { id: true },
+    select: { id: true, project: { select: { memberIds: true } } },
   });
 
   if (!milestone) {
     return buildError("Milestone not found.", 404);
+  }
+
+  if (!milestone.project.memberIds?.includes(context.user.id)) {
+    return buildError("You do not have permission to add tasks.", 403);
   }
 
   let resolvedOwnerId = ownerId;

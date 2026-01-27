@@ -20,7 +20,42 @@ const normalizeProject = (project) => ({
   name: project.name,
   description: project.description ?? "",
   status: project.status ?? "Active",
+  members: project.members ?? [],
 });
+
+const ProjectMembers = ({ members }) => {
+  const visibleMembers = members.slice(0, 3);
+  const extraCount = Math.max(0, members.length - visibleMembers.length);
+
+  if (!members.length) {
+    return (
+      <span className="text-xs text-[color:var(--color-text-subtle)]">
+        No members yet
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex items-center">
+      <div className="flex -space-x-2">
+        {visibleMembers.map((member) => (
+          <span
+            key={member.id}
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] text-[11px] font-semibold text-[color:var(--color-text)]"
+            title={member.name}
+          >
+            {(member.name ?? "U").charAt(0).toUpperCase()}
+          </span>
+        ))}
+        {extraCount > 0 ? (
+          <span className="flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] text-[10px] font-semibold text-[color:var(--color-text-subtle)]">
+            +{extraCount}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+};
 
 export default function ProjectListView({ canManageProjects }) {
   const { addToast } = useToast();
@@ -254,7 +289,8 @@ export default function ProjectListView({ canManageProjects }) {
                     {project.status}
                   </span>
                 </div>
-                <div className="mt-4 flex items-center justify-end">
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <ProjectMembers members={project.members} />
                   <ProjectActionMenu project={project} />
                 </div>
               </div>
@@ -268,6 +304,7 @@ export default function ProjectListView({ canManageProjects }) {
                   <th className="px-4 py-3">Project</th>
                   <th className="px-4 py-3">Description</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Members</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -295,6 +332,9 @@ export default function ProjectListView({ canManageProjects }) {
                       <span className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)]">
                         {project.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <ProjectMembers members={project.members} />
                     </td>
                     <td className="px-4 py-3 text-right">
                       <ProjectActionMenu project={project} />

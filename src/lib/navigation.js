@@ -5,12 +5,12 @@ export const navigationItems = [
   {
     label: "Projects",
     href: "/projects",
-    roles: [roles.PM, roles.CTO, roles.SENIOR_DEV],
+    roles: [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV, roles.DEV],
   },
   {
     label: "Milestones",
     href: "/milestones",
-    roles: [roles.PM, roles.CTO, roles.SENIOR_DEV],
+    roles: [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV, roles.DEV],
   },
   {
     label: "Activity",

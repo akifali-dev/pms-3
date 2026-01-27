@@ -20,16 +20,35 @@ export default function ProjectModal({
   const [formValues, setFormValues] = useState({
     name: "",
     description: "",
+    memberIds: [],
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
     if (!isOpen) return;
     setFormValues({
       name: initialValues?.name ?? "",
       description: initialValues?.description ?? "",
+      memberIds: (initialValues?.members ?? []).map((member) => member.id),
     });
   }, [isOpen, initialValues]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const loadUsers = async () => {
+      try {
+        const response = await fetch("/api/users?isActive=true");
+        const data = await response.json();
+        if (response.ok) {
+          setUsers(data?.users ?? []);
+        }
+      } catch (error) {
+        setUsers([]);
+      }
+    };
+    loadUsers();
+  }, [isOpen]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -52,6 +71,7 @@ export default function ProjectModal({
           body: JSON.stringify({
             name: formValues.name,
             description: formValues.description,
+            memberIds: formValues.memberIds,
           }),
         }
       );
@@ -119,6 +139,44 @@ export default function ProjectModal({
             }
           />
         </label>
+        <div className="space-y-2 text-xs text-[color:var(--color-text-muted)]">
+          <p>Members</p>
+          <div className="grid max-h-40 gap-2 overflow-y-auto rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] p-3 text-xs text-[color:var(--color-text)]">
+            {users.length ? (
+              users.map((user) => {
+                const isSelected = formValues.memberIds.includes(user.id);
+                return (
+                  <label
+                    key={user.id}
+                    className="flex items-center gap-2"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-[color:var(--color-border)] bg-transparent text-[color:var(--color-accent)]"
+                      checked={isSelected}
+                      onChange={(event) => {
+                        setFormValues((prev) => {
+                          const next = new Set(prev.memberIds);
+                          if (event.target.checked) {
+                            next.add(user.id);
+                          } else {
+                            next.delete(user.id);
+                          }
+                          return { ...prev, memberIds: Array.from(next) };
+                        });
+                      }}
+                    />
+                    <span>{user.name}</span>
+                  </label>
+                );
+              })
+            ) : (
+              <p className="text-xs text-[color:var(--color-text-subtle)]">
+                No active users available.
+              </p>
+            )}
+          </div>
+        </div>
         <div className="flex flex-wrap justify-end gap-2">
           <ActionButton
             label="Cancel"
