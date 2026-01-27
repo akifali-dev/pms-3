@@ -69,7 +69,12 @@ const getTypeBadge = (type) => {
   }
 };
 
-export default function TaskBoard({ tasks, role, currentUserId }) {
+export default function TaskBoard({
+  tasks,
+  role,
+  currentUserId,
+  onEditTask,
+}) {
   const { addToast } = useToast();
   const [taskItems, setTaskItems] = useState(tasks);
   const [pendingTaskId, setPendingTaskId] = useState(null);
@@ -218,6 +223,18 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
   const isChecklistComplete = (task) =>
     task.checklistItems?.length > 0 &&
     task.checklistItems.every((item) => item.isCompleted);
+
+  const canEditTask = (task) => {
+    if (!currentUserId) {
+      return false;
+    }
+
+    if (task.ownerId === currentUserId) {
+      return true;
+    }
+
+    return [roles.PM, roles.CTO, roles.SENIOR_DEV].includes(role);
+  };
 
   const canEditChecklist = (task) => {
     if (!currentUserId) {
@@ -434,10 +451,6 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                   task.checklistItems?.filter((item) => item.isCompleted)
                     .length ?? 0;
                 const checklistTotal = task.checklistItems?.length ?? 0;
-                const checklistRemaining = Math.max(
-                  checklistTotal - completedChecklistCount,
-                  0
-                );
                 const estimatedSeconds = Math.max(
                   0,
                   (task.estimatedHours ?? 0) * 3600
@@ -458,42 +471,43 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                     onDragEnd={handleDragEnd}
                     onClick={() => setSelectedTaskId(task.id)}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-[color:var(--color-text)]">
-                        {task.title}
-                      </p>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${getTypeBadge(
-                          task.type
-                        )}`}
-                      >
-                        {task.type}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-[color:var(--color-text)]">
+                      {task.title}
+                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--color-muted-bg)] text-xs font-semibold text-[color:var(--color-text)]">
                           {(task.owner?.name ?? "U").charAt(0).toUpperCase()}
                         </span>
-                        <div className="text-xs text-[color:var(--color-text-muted)]">
-                          {task.owner?.name ?? "Unassigned"}
+                        <div className="flex items-center gap-1 text-xs text-[color:var(--color-text-subtle)]">
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                          >
+                            <path
+                              d="M9 12h8M9 7h8M5 7h.01M5 12h.01M5 17h.01M9 17h8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                          <span>
+                            {completedChecklistCount}/{checklistTotal}
+                          </span>
                         </div>
                       </div>
-                      <ProgressRing progress={progress} state={progressState} />
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-xs text-[color:var(--color-text-subtle)]">
-                      <span>
-                        Est {formatEstimatedTime(task.estimatedHours)}
-                      </span>
-                      <span>
-                        Logged {formatDurationShort(task.totalTimeSpent)}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-[color:var(--color-text-subtle)]">
-                      <span>
-                        Checklist {completedChecklistCount}/{checklistTotal}
-                      </span>
-                      <span>{checklistRemaining} left</span>
+                      <div className="flex flex-col items-center text-[10px] text-[color:var(--color-text-subtle)]">
+                        <ProgressRing
+                          progress={progress}
+                          state={progressState}
+                        />
+                        <span>
+                          {formatEstimatedTime(task.estimatedHours)}
+                        </span>
+                        <span>{formatDurationShort(task.totalTimeSpent)}</span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -584,13 +598,23 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                 <p className="text-lg font-semibold text-[color:var(--color-text)]">
                   {selectedTask.title}
                 </p>
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${getTypeBadge(
-                    selectedTask.type
-                  )}`}
-                >
-                  {selectedTask.type}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${getTypeBadge(
+                      selectedTask.type
+                    )}`}
+                  >
+                    {selectedTask.type}
+                  </span>
+                  {canEditTask(selectedTask) && onEditTask ? (
+                    <ActionButton
+                      label="Edit task"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onEditTask(selectedTask)}
+                    />
+                  ) : null}
+                </div>
               </div>
               <p className="text-sm text-[color:var(--color-text-muted)]">
                 {selectedTask.description}
@@ -656,19 +680,27 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
                   Time logs
                 </p>
-                {selectedTask.activityLogs?.length ? (
+                {selectedTask.timeLogs?.length ? (
                   <ul className="mt-3 space-y-2 text-xs text-[color:var(--color-text-muted)]">
-                    {selectedTask.activityLogs.map((log) => (
+                    {selectedTask.timeLogs.map((log) => (
                       <li
                         key={log.id}
                         className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] px-3 py-2"
                       >
                         <p className="text-[color:var(--color-text)]">
-                          {log.description}
+                          {getStatusLabel(log.status)}
                         </p>
                         <p className="mt-1 text-[color:var(--color-text-subtle)]">
-                          {new Date(log.date).toLocaleDateString()} ·{" "}
-                          {log.hoursSpent}h
+                          {new Date(log.startedAt).toLocaleDateString()} ·{" "}
+                          {formatDurationShort(
+                            log.endedAt
+                              ? (new Date(log.endedAt).getTime() -
+                                  new Date(log.startedAt).getTime()) /
+                                  1000
+                              : (Date.now() -
+                                  new Date(log.startedAt).getTime()) /
+                                  1000
+                          )}
                         </p>
                       </li>
                     ))}

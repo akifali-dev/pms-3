@@ -8,7 +8,8 @@ import {
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
-import { getChecklistForTaskType } from "@/lib/taskChecklists";
+import { calculateTotalTimeSpent } from "@/lib/timeLogs";
+import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -20,6 +21,8 @@ async function getTask(taskId) {
       },
       checklistItems: true,
       statusHistory: true,
+      activityLogs: true,
+      timeLogs: true,
     },
   });
 }
@@ -36,34 +39,8 @@ function canAccessTask(context, task) {
   return task.ownerId === context.user.id;
 }
 
-export async function GET(request, { params }) {
-    const {id : taskId} = await params;
-
-  const context = await getAuthContext();
-  const authError = ensureAuthenticated(context);
-  if (authError) {
-    return authError;
-  }
-
- 
-  if (!taskId) {
-    return buildError("Task id is required.", 400);
-  }
-
-  const task = await getTask(taskId);
-  if (!task) {
-    return buildError("Task not found.", 404);
-  }
-
-  if (!canAccessTask(context, task)) {
-    return buildError("You do not have permission to view this task.", 403);
-  }
-
-  return buildSuccess("Task loaded.", { task });
-}
-
 export async function PATCH(request, { params }) {
-  const {id : taskId} = await params;
+  const { id: taskId } = await params;
 
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
@@ -71,7 +48,12 @@ export async function PATCH(request, { params }) {
     return authError;
   }
 
- 
+  const allowedRoles = [...ADMIN_ROLES, "DEVELOPER"];
+  const roleError = ensureRole(context.role, allowedRoles);
+  if (roleError) {
+    return roleError;
+  }
+
   if (!taskId) {
     return buildError("Task id is required.", 400);
   }
@@ -88,75 +70,112 @@ export async function PATCH(request, { params }) {
   const body = await request.json();
   const updates = {};
 
-  if (body?.title) {
-    updates.title = body.title.trim();
+  if (body?.title !== undefined) {
+    const trimmedTitle = body.title.trim();
+    if (!trimmedTitle) {
+      return buildError("Task title is required.", 400);
+    }
+    updates.title = trimmedTitle;
   }
 
-  if (body?.description) {
-    updates.description = body.description.trim();
+  if (body?.description !== undefined) {
+    const trimmedDescription = body.description.trim();
+    if (!trimmedDescription) {
+      return buildError("Task description is required.", 400);
+    }
+    updates.description = trimmedDescription;
   }
 
-  if (body?.status && body.status !== task.status) {
-    return buildError("Use the status endpoint to move tasks.", 400);
-  }
-
-  if (body?.type) {
+  if (body?.type !== undefined) {
+    if (!Object.keys(TASK_TYPE_CHECKLISTS).includes(body.type)) {
+      return buildError("Task type is invalid.", 400);
+    }
     updates.type = body.type;
   }
 
-  if (typeof body?.estimatedHours === "number") {
-    if (body.estimatedHours < 0) {
+  if (body?.estimatedHours !== undefined) {
+    const estimatedHours = Number(body.estimatedHours ?? 0);
+    if (!Number.isFinite(estimatedHours) || estimatedHours < 0) {
       return buildError("Estimated hours must be a valid number.", 400);
     }
-    updates.estimatedHours = body.estimatedHours;
+    updates.estimatedHours = estimatedHours;
   }
 
-  if (body?.milestoneId) {
-    const milestone = await prisma.milestone.findUnique({
-      where: { id: body.milestoneId },
-      select: { id: true },
-    });
+  if (body?.ownerId !== undefined) {
+    if (!isAdminRole(context.role)) {
+      if (body.ownerId && body.ownerId !== context.user.id) {
+        return buildError("You can only assign tasks to yourself.", 403);
+      }
+    } else {
+      if (body.ownerId) {
+        const owner = await prisma.user.findUnique({
+          where: { id: body.ownerId },
+          select: { id: true },
+        });
 
-    if (!milestone) {
-      return buildError("Milestone not found.", 404);
+        if (!owner) {
+          return buildError("Task owner not found.", 404);
+        }
+      }
     }
-
-    updates.milestoneId = body.milestoneId;
-  }
-
-  if (body?.ownerId && isAdminRole(context.role)) {
-    const owner = await prisma.user.findUnique({
-      where: { id: body.ownerId },
-      select: { id: true },
-    });
-
-    if (!owner) {
-      return buildError("Task owner not found.", 404);
-    }
-
     updates.ownerId = body.ownerId;
   }
 
-  if (Object.keys(updates).length === 0) {
-    return buildError("No valid updates provided.", 400);
+  if (body?.status) {
+    return buildError("Task status changes must use the status endpoint.", 400);
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.task.update({
+  const checklistItems = Array.isArray(body?.checklistItems)
+    ? body.checklistItems
+    : null;
+
+  const updatedTask = await prisma.$transaction(async (tx) => {
+    const updated = await tx.task.update({
       where: { id: taskId },
       data: updates,
     });
 
-    if (updates.type && task.checklistItems.length === 0) {
-      const checklistLabels = getChecklistForTaskType(updates.type);
-      if (checklistLabels.length > 0) {
-        await tx.checklistItem.createMany({
-          data: checklistLabels.map((label) => ({
-            taskId,
-            label,
-          })),
+    if (checklistItems) {
+      const normalizedItems = checklistItems
+        .map((item) => ({
+          id: item.id,
+          label: item.label?.trim() ?? "",
+          isCompleted: Boolean(item.isCompleted),
+        }))
+        .filter((item) => item.label);
+
+      const existingIds = new Set(task.checklistItems.map((item) => item.id));
+      const incomingIds = new Set(
+        normalizedItems.filter((item) => item.id).map((item) => item.id)
+      );
+
+      const deleteIds = Array.from(existingIds).filter(
+        (id) => !incomingIds.has(id)
+      );
+
+      if (deleteIds.length > 0) {
+        await tx.checklistItem.deleteMany({
+          where: { id: { in: deleteIds } },
         });
       }
+
+      await Promise.all(
+        normalizedItems.map((item) => {
+          if (item.id && existingIds.has(item.id)) {
+            return tx.checklistItem.update({
+              where: { id: item.id },
+              data: { label: item.label, isCompleted: item.isCompleted },
+            });
+          }
+          return tx.checklistItem.create({
+            data: {
+              taskId,
+              label: item.label,
+              isCompleted: item.isCompleted,
+            },
+          });
+        })
+      );
     }
 
     return tx.task.findUnique({
@@ -168,57 +187,16 @@ export async function PATCH(request, { params }) {
         },
         checklistItems: true,
         statusHistory: true,
+        activityLogs: true,
+        timeLogs: true,
       },
     });
   });
 
-  return buildSuccess("Task updated.", { task: updated });
-}
-
-
-export async function DELETE(request, { params }) {
-    const {id : taskId} = await params;
-  const context = await getAuthContext();
-  const authError = ensureAuthenticated(context);
-  if (authError) {
-    return authError;
-  }
-
-  const allowedRoles = [...ADMIN_ROLES, "DEVELOPER"];
-  const roleError = ensureRole(context.role, allowedRoles);
-  if (roleError) {
-    return roleError;
-  }
-
-
-  if (!taskId) {
-    return buildError("Task id is required.", 400);
-  }
-
-  const task = await getTask(taskId);
-  if (!task) {
-    return buildError("Task not found.", 404);
-  }
-
-  if (!canAccessTask(context, task)) {
-    return buildError("You do not have permission to delete this task.", 403);
-  }
-
-  try {
-    await prisma.$transaction([
-      prisma.checklistItem.deleteMany({ where: { taskId } }),
-      prisma.taskStatusHistory.deleteMany({ where: { taskId } }),
-      prisma.task.delete({ where: { id: taskId } }),
-    ]);
-
-    return buildSuccess("Task deleted.");
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === "P2025") {
-        return buildError("Task not found.", 404);
-      }
-    }
-
-    return buildError("Unable to delete task.", 500);
-  }
+  return buildSuccess("Task updated.", {
+    task: {
+      ...updatedTask,
+      totalTimeSpent: calculateTotalTimeSpent(updatedTask.timeLogs),
+    },
+  });
 }

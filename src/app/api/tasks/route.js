@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import { TASK_STATUSES } from "@/lib/kanban";
 import { getChecklistForTaskType } from "@/lib/taskChecklists";
+import { calculateTotalTimeSpent } from "@/lib/timeLogs";
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -59,10 +60,16 @@ export async function GET(request) {
       checklistItems: true,
       statusHistory: true,
       activityLogs: true,
+      timeLogs: true,
     },
   });
 
-  return buildSuccess("Tasks loaded.", { tasks });
+  const hydratedTasks = tasks.map((task) => ({
+    ...task,
+    totalTimeSpent: calculateTotalTimeSpent(task.timeLogs),
+  }));
+
+  return buildSuccess("Tasks loaded.", { tasks: hydratedTasks });
 }
 
 export async function POST(request) {
@@ -160,6 +167,7 @@ export async function POST(request) {
         checklistItems: true,
         statusHistory: true,
         activityLogs: true,
+        timeLogs: true,
       },
     });
 
@@ -182,6 +190,16 @@ export async function POST(request) {
       },
     });
 
+    if (status === "IN_PROGRESS") {
+      await tx.taskTimeLog.create({
+        data: {
+          taskId: createdTask.id,
+          status,
+          startedAt: new Date(),
+        },
+      });
+    }
+
     await tx.activityLog.create({
       data: {
         userId: createdTask.ownerId,
@@ -202,9 +220,19 @@ export async function POST(request) {
         checklistItems: true,
         statusHistory: true,
         activityLogs: true,
+        timeLogs: true,
       },
     });
   });
 
-  return buildSuccess("Task created.", { task }, 201);
+  return buildSuccess(
+    "Task created.",
+    {
+      task: {
+        ...task,
+        totalTimeSpent: calculateTotalTimeSpent(task.timeLogs),
+      },
+    },
+    201
+  );
 }
