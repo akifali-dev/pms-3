@@ -16,10 +16,7 @@ const manualCategories = [
   { id: "IDLE", label: "Idle time" },
 ];
 
-const commentTargets = [
-  { id: "user", label: "User" },
-  { id: "task", label: "Task" },
-];
+const commentTargets = [{ id: "user", label: "User" }];
 
 function formatDateTime(value) {
   const date = new Date(value);
@@ -58,7 +55,6 @@ export default function ActivityDashboard({
   initialLogs,
   initialComments,
   users,
-  tasks,
   currentUser,
   role,
 }) {
@@ -74,7 +70,6 @@ export default function ActivityDashboard({
   });
   const [commentForm, setCommentForm] = useState({
     target: "user",
-    taskId: "",
     createdForId: "",
     message: "",
   });
@@ -202,16 +197,7 @@ export default function ActivityDashboard({
   const handleSubmitComment = async (event) => {
     event.preventDefault();
 
-    if (commentForm.target === "task" && !commentForm.taskId) {
-      addToast({
-        title: "Select a task",
-        message: "Choose a task before sharing feedback.",
-        variant: "warning",
-      });
-      return;
-    }
-
-    if (commentForm.target === "user" && !commentForm.createdForId) {
+    if (!commentForm.createdForId) {
       addToast({
         title: "Select a user",
         message: "Choose a user before sharing feedback.",
@@ -224,13 +210,8 @@ export default function ActivityDashboard({
 
     const payload = {
       message: commentForm.message,
+      createdForId: commentForm.createdForId,
     };
-
-    if (commentForm.target === "task") {
-      payload.taskId = commentForm.taskId;
-    } else {
-      payload.createdForId = commentForm.createdForId;
-    }
 
     const response = await fetch("/api/comments", {
       method: "POST",
@@ -410,41 +391,22 @@ export default function ActivityDashboard({
                 ))}
               </select>
             </label>
-            {commentForm.target === "task" ? (
-              <label className="grid gap-2 text-xs text-white/70 lg:col-span-2">
-                Task
-                <select
-                  name="taskId"
-                  value={commentForm.taskId}
-                  onChange={handleCommentChange}
-                  className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
-                >
-                  <option value="">Select task</option>
-                  {tasks.map((task) => (
-                    <option key={task.id} value={task.id}>
-                      {task.title} · {task.owner?.name ?? "Unassigned"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <label className="grid gap-2 text-xs text-white/70 lg:col-span-2">
-                User
-                <select
-                  name="createdForId"
-                  value={commentForm.createdForId}
-                  onChange={handleCommentChange}
-                  className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
-                >
-                  <option value="">Select user</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name} · {user.role}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+            <label className="grid gap-2 text-xs text-white/70 lg:col-span-2">
+              User
+              <select
+                name="createdForId"
+                value={commentForm.createdForId}
+                onChange={handleCommentChange}
+                className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
+              >
+                <option value="">Select user</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} · {user.role}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <label className="mt-3 grid gap-2 text-xs text-white/70">
             Comment

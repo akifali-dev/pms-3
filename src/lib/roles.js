@@ -44,7 +44,6 @@ export const routeAccess = {
   ],
   "/projects": [roles.PM, roles.CTO, roles.SENIOR_DEV],
   "/milestones": [roles.PM, roles.CTO, roles.SENIOR_DEV],
-  "/tasks": [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV, roles.DEV],
   "/activity": [
     roles.CEO,
     roles.PM,
@@ -59,7 +58,7 @@ export const routeAccess = {
 export const taskPermissions = {
   [roles.CEO]: {
     canMoveTask: false,
-    canMarkDone: true,
+    canMarkDone: false,
   },
   [roles.PM]: {
     canMoveTask: true,
@@ -71,7 +70,7 @@ export const taskPermissions = {
   },
   [roles.SENIOR_DEV]: {
     canMoveTask: true,
-    canMarkDone: true,
+    canMarkDone: false,
   },
   [roles.DEV]: {
     canMoveTask: true,

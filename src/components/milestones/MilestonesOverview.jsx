@@ -150,7 +150,11 @@ export default function MilestonesOverview() {
                 <MilestoneCard
                   key={milestone.id}
                   milestone={milestone}
-                  href={`/milestones/${milestone.id}`}
+                  href={
+                    milestone.project?.id
+                      ? `/projects/${milestone.project.id}/milestones/${milestone.id}`
+                      : undefined
+                  }
                 />
               ))}
             </div>

@@ -92,6 +92,8 @@ model Task {
   milestone      Milestone      @relation(fields: [milestoneId], references: [id])
   estimatedHours Float
   reworkCount    Int            @default(0)
+  totalTimeSpent Int            @default(0)
+  lastStartedAt  DateTime?
   checklistItems ChecklistItem[]
   statusHistory  TaskStatusHistory[]
   activityLogs   ActivityLog[]

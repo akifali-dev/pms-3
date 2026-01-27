@@ -11,7 +11,6 @@ export default async function ActivityPage() {
 
   let currentUser = null;
   let users = [];
-  let tasks = [];
   let activityLogs = [];
   let comments = [];
 
@@ -59,17 +58,6 @@ export default async function ActivityPage() {
         },
       });
 
-      if (["PM", "CTO"].includes(role)) {
-        tasks = await prisma.task.findMany({
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            title: true,
-            ownerId: true,
-            owner: { select: { id: true, name: true } },
-          },
-        });
-      }
     }
   }
 
@@ -78,7 +66,6 @@ export default async function ActivityPage() {
       initialLogs={activityLogs}
       initialComments={comments}
       users={users}
-      tasks={tasks}
       currentUser={currentUser}
       role={role}
     />
