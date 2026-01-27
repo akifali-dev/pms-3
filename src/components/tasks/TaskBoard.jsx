@@ -81,7 +81,8 @@ export default function TaskBoard({
   const [pendingChecklistId, setPendingChecklistId] = useState(null);
   const [draggingTaskId, setDraggingTaskId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
-  const [scope, setScope] = useState(currentUserId ? "mine" : "all");
+  // Default to all tasks so milestone boards don't appear empty for managers.
+  const [scope, setScope] = useState("all");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [ownerFilter, setOwnerFilter] = useState("ALL");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
