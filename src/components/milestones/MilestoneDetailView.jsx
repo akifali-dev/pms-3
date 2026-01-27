@@ -5,13 +5,18 @@ import ActionButton from "@/components/ui/ActionButton";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/ToastProvider";
 import MilestoneCard from "@/components/milestones/MilestoneCard";
-import { TASK_STATUSES, getStatusLabel } from "@/lib/kanban";
+import TaskBoard from "@/components/tasks/TaskBoard";
+import { TASK_STATUSES } from "@/lib/kanban";
 import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
 
 const buildErrorMessage = (data) =>
   data?.error ?? data?.message ?? "Unable to load milestone.";
 
-export default function MilestoneDetailView({ milestoneId }) {
+export default function MilestoneDetailView({
+  milestoneId,
+  role,
+  currentUserId,
+}) {
   const { addToast } = useToast();
   const [milestone, setMilestone] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -174,39 +179,17 @@ export default function MilestoneDetailView({ milestoneId }) {
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-white">Tasks</p>
+              <p className="text-sm font-semibold text-white">Task board</p>
               <span className="text-xs text-white/60">
                 {tasks.length} total
               </span>
             </div>
             {tasks.length ? (
-              <div className="space-y-3">
-                {tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="rounded-2xl border border-white/10 bg-slate-900/60 p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {task.title}
-                        </p>
-                        <p className="mt-1 text-xs text-white/60">
-                          {task.description}
-                        </p>
-                      </div>
-                      <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/70">
-                        {getStatusLabel(task.status)} · {task.type}
-                      </div>
-                    </div>
-                    {task.owner?.name ? (
-                      <p className="mt-2 text-xs text-white/50">
-                        Owner: {task.owner.name}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+              <TaskBoard
+                tasks={tasks}
+                role={role}
+                currentUserId={currentUserId}
+              />
             ) : (
               <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-6 text-center text-sm text-white/60">
                 No tasks yet.

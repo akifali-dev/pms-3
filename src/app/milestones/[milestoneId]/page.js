@@ -1,8 +1,22 @@
-import MilestoneDetailView from "@/components/milestones/MilestoneDetailView";
+import { redirect, notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 
 export default async function MilestoneDetailPage({ params }) {
-  console.log("params",params)
-    const {milestoneId}= await params;
-    console.log("milestoneId",milestoneId)
-  return <MilestoneDetailView milestoneId={milestoneId} />;
+  const { milestoneId } = await params;
+  const hasDatabase = Boolean(process.env.DATABASE_URL);
+
+  if (!hasDatabase) {
+    redirect("/projects");
+  }
+
+  const milestone = await prisma.milestone.findUnique({
+    where: { id: milestoneId },
+    select: { projectId: true },
+  });
+
+  if (!milestone) {
+    notFound();
+  }
+
+  redirect(`/projects/${milestone.projectId}/milestones/${milestoneId}`);
 }

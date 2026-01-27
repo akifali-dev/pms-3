@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   ADMIN_ROLES,
@@ -9,7 +8,6 @@ import {
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
-import { getStatusLabel, isValidTransition } from "@/lib/kanban";
 import { getChecklistForTaskType } from "@/lib/taskChecklists";
 
 async function getTask(taskId) {
@@ -89,7 +87,6 @@ export async function PATCH(request, { params }) {
 
   const body = await request.json();
   const updates = {};
-  let statusChange = null;
 
   if (body?.title) {
     updates.title = body.title.trim();
@@ -100,41 +97,7 @@ export async function PATCH(request, { params }) {
   }
 
   if (body?.status && body.status !== task.status) {
-    const nextStatus = body.status;
-    const allowedTransition = isValidTransition(task.status, nextStatus);
-
-    if (!allowedTransition) {
-      return buildError(
-        `Invalid transition from ${getStatusLabel(
-          task.status
-        )} to ${getStatusLabel(nextStatus)}.`,
-        400
-      );
-    }
-
-    if (["DONE", "REJECTED"].includes(nextStatus) && context.role !== "PM") {
-      return buildError("Only PMs can approve or reject tasks.", 403);
-    }
-
-    if (nextStatus === "TESTING") {
-      const checklistComplete =
-        task.checklistItems.length > 0 &&
-        task.checklistItems.every((item) => item.isCompleted);
-
-      if (!checklistComplete) {
-        return buildError(
-          "Complete the checklist before moving the task to testing.",
-          400
-        );
-      }
-    }
-
-    updates.status = nextStatus;
-    statusChange = { from: task.status, to: nextStatus };
-
-    if (nextStatus === "REJECTED") {
-      updates.reworkCount = task.reworkCount + 1;
-    }
+    return buildError("Use the status endpoint to move tasks.", 400);
   }
 
   if (body?.type) {
@@ -194,31 +157,6 @@ export async function PATCH(request, { params }) {
           })),
         });
       }
-    }
-
-    if (statusChange) {
-      await tx.taskStatusHistory.create({
-        data: {
-          taskId,
-          fromStatus: statusChange.from,
-          toStatus: statusChange.to,
-          changedById: context.user.id,
-        },
-      });
-
-      const actorName =
-        context.user?.name || context.user?.email || "A teammate";
-      const activityOwnerId = updates.ownerId ?? task.ownerId;
-
-      await tx.activityLog.create({
-        data: {
-          userId: activityOwnerId,
-          taskId,
-          category: "TASK",
-          hoursSpent: 0,
-          description: `Task status updated by ${actorName}: ${task.title} moved from ${statusChange.from ?? "new"} to ${statusChange.to}.`,
-        },
-      });
     }
 
     return tx.task.findUnique({

@@ -22,21 +22,18 @@ export async function GET(request) {
   const ownerId = searchParams.get("ownerId");
   const status = searchParams.get("status");
   const milestoneId = searchParams.get("milestoneId");
-  const projectId = searchParams.get("projectId");
 
   const where = {};
+
+  if (!milestoneId) {
+    return buildError("Milestone id is required.", 400);
+  }
 
   if (status) {
     where.status = status;
   }
 
-  if (milestoneId) {
-    where.milestoneId = milestoneId;
-  }
-
-  if (projectId) {
-    where.milestone = { projectId };
-  }
+  where.milestoneId = milestoneId;
 
   if (isAdminRole(context.role)) {
     if (ownerId) {
@@ -100,8 +97,10 @@ export async function POST(request) {
     return buildError("Task status is invalid.", 400);
   }
 
-  if (["DONE", "REJECTED"].includes(status) && context.role !== "PM") {
-    return buildError("Only PMs can approve or reject tasks.", 403);
+  if (["DONE", "REJECTED"].includes(status)) {
+    if (!["PM", "CTO"].includes(context.role)) {
+      return buildError("Only PMs and CTOs can approve or reject tasks.", 403);
+    }
   }
 
   if (!Number.isFinite(estimatedHours) || estimatedHours < 0) {

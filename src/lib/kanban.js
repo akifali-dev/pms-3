@@ -1,11 +1,11 @@
 export const TASK_STATUSES = [
-  { id: "BACKLOG", label: "Backlog" },
-  { id: "READY", label: "Ready" },
-  { id: "IN_PROGRESS", label: "In Progress" },
-  { id: "DEV_TEST", label: "Dev Test" },
-  { id: "TESTING", label: "Testing" },
-  { id: "DONE", label: "Done" },
-  { id: "REJECTED", label: "Rejected" },
+  { id: "BACKLOG", label: "BACKLOG" },
+  { id: "READY", label: "READY" },
+  { id: "IN_PROGRESS", label: "IN_PROGRESS" },
+  { id: "DEV_TEST", label: "DEV_TEST" },
+  { id: "TESTING", label: "TESTING" },
+  { id: "DONE", label: "DONE" },
+  { id: "REJECTED", label: "REJECTED" },
 ];
 
 export const TASK_TRANSITIONS = {

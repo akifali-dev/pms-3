@@ -194,7 +194,7 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
                   <MilestoneCard
                     key={milestone.id}
                     milestone={milestone}
-                    href={`/milestones/${milestone.id}`}
+                    href={`/projects/${projectId}/milestones/${milestone.id}`}
                   />
                 ))}
               </div>

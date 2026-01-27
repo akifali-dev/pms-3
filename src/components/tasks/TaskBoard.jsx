@@ -4,13 +4,26 @@ import { useEffect, useMemo, useState } from "react";
 import ActionButton from "@/components/ui/ActionButton";
 import { useToast } from "@/components/ui/ToastProvider";
 import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
-import { canMoveTask, roles } from "@/lib/roles";
+import { canMarkTaskDone, canMoveTask, roles } from "@/lib/roles";
+
+const formatDuration = (totalSeconds = 0) => {
+  const seconds = Math.max(0, Number(totalSeconds) || 0);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+    2,
+    "0"
+  )}:${String(remainingSeconds).padStart(2, "0")}`;
+};
 
 export default function TaskBoard({ tasks, role, currentUserId }) {
   const { addToast } = useToast();
   const [taskItems, setTaskItems] = useState(tasks);
   const [pendingTaskId, setPendingTaskId] = useState(null);
   const [pendingChecklistId, setPendingChecklistId] = useState(null);
+  const [draggingTaskId, setDraggingTaskId] = useState(null);
+  const [dragOverStatus, setDragOverStatus] = useState(null);
   const [scope, setScope] = useState(currentUserId ? "mine" : "all");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [ownerFilter, setOwnerFilter] = useState("ALL");
@@ -69,7 +82,7 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
     }
 
     setPendingTaskId(task.id);
-    const response = await fetch(`/api/tasks/${task.id}`, {
+    const response = await fetch(`/api/tasks/${task.id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: nextStatus }),
@@ -153,12 +166,40 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
     return [roles.PM, roles.CTO, roles.SENIOR_DEV].includes(role);
   };
 
+  const handleDragStart = (event, task) => {
+    if (!canMoveTask(role)) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", task.id);
+    setDraggingTaskId(task.id);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingTaskId(null);
+    setDragOverStatus(null);
+  };
+
+  const handleDrop = (event, statusId) => {
+    event.preventDefault();
+    const taskId = event.dataTransfer.getData("text/plain");
+    const task = taskItems.find((item) => item.id === taskId);
+    setDragOverStatus(null);
+
+    if (!task || task.status === statusId) {
+      return;
+    }
+
+    handleStatusChange(task, statusId);
+  };
+
   const renderActions = (task) => {
     const isPending = pendingTaskId === task.id;
     const buttonClass = isPending ? "pointer-events-none opacity-60" : "";
 
     if (task.status === "TESTING") {
-      if (role === roles.PM) {
+      if (canMarkTaskDone(role)) {
         return (
           <div className="flex flex-wrap gap-2">
             <ActionButton
@@ -181,7 +222,7 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
 
       return (
         <p className="text-xs text-white/50">
-          Awaiting PM approval for testing.
+          Awaiting PM/CTO approval for testing.
         </p>
       );
     }
@@ -305,7 +346,17 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
         {TASK_STATUSES.map((status) => (
           <div
             key={status.id}
-            className="min-w-[220px] flex-1 space-y-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4"
+            className={`min-w-[240px] flex-1 space-y-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4 transition ${
+              dragOverStatus === status.id
+                ? "border-white/40 bg-slate-900/70"
+                : ""
+            }`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragOverStatus(status.id);
+            }}
+            onDragLeave={() => setDragOverStatus(null)}
+            onDrop={(event) => handleDrop(event, status.id)}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-white">
@@ -319,15 +370,34 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
               {(groupedTasks[status.id] ?? []).map((task) => (
                 <div
                   key={task.id}
-                  className="rounded-xl border border-white/10 bg-slate-900/70 p-4"
+                  className={`rounded-xl border border-white/10 bg-slate-900/70 p-4 ${
+                    pendingTaskId === task.id ? "opacity-60" : ""
+                  } ${draggingTaskId === task.id ? "opacity-70" : ""}`}
+                  draggable={canMoveTask(role)}
+                  onDragStart={(event) => handleDragStart(event, task)}
+                  onDragEnd={handleDragEnd}
                 >
                   <p className="text-sm font-semibold text-white">
                     {task.title}
                   </p>
                   <p className="mt-1 text-xs text-white/60">
-                    {task.milestone?.title ?? "No milestone"} ·{" "}
-                    {task.owner?.name ?? "Unassigned"}
+                    Owner: {task.owner?.name ?? "Unassigned"}
                   </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/50">
+                    <span className="rounded-full border border-white/10 px-2 py-0.5">
+                      Time {formatDuration(task.totalTimeSpent)}
+                    </span>
+                    {task.reworkCount > 0 && (
+                      <span className="rounded-full border border-amber-300/40 px-2 py-0.5 text-amber-200">
+                        Rework {task.reworkCount}
+                      </span>
+                    )}
+                    {pendingTaskId === task.id && (
+                      <span className="rounded-full border border-sky-200/40 px-2 py-0.5 text-sky-200">
+                        Updating...
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-3 flex flex-col gap-3">
                     <span className="w-fit rounded-full border border-white/10 px-3 py-1 text-xs text-white/60">
                       {getStatusLabel(task.status)}
@@ -386,7 +456,8 @@ export default function TaskBoard({ tasks, role, currentUserId }) {
                           No checklist items assigned.
                         </p>
                       )}
-                      {task.status === "TESTING" && role === roles.PM && (
+                      {task.status === "TESTING" &&
+                        canMarkTaskDone(role) && (
                         <p className="mt-3 text-xs text-sky-200">
                           PM review checklist for testing sign-off.
                         </p>
