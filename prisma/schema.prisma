@@ -46,6 +46,11 @@ enum NotificationType {
   USER_LOG_COMMENT
 }
 
+enum CommentEntityType {
+  TASK
+  MANUAL_LOG
+}
+
 model User {
   id               String        @id @default(auto()) @map("_id") @db.ObjectId
   name             String
@@ -61,7 +66,6 @@ model User {
   activityLogs     ActivityLog[]
   statusChanges    TaskStatusHistory[] @relation("TaskStatusHistoryChangedBy")
   commentsWritten  Comment[]     @relation("CommentCreator")
-  commentsReceived Comment[]     @relation("CommentRecipient")
   notificationsAuthored Notification[] @relation("NotificationActor")
   notificationRecipients NotificationRecipient[]
 }
@@ -121,7 +125,6 @@ model Task {
   statusHistory  TaskStatusHistory[]
   timeLogs       TaskTimeLog[]
   activityLogs   ActivityLog[]
-  comments       Comment[]
   notifications  Notification[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -173,11 +176,21 @@ model Comment {
   message      String
   createdById  String   @db.ObjectId
   createdBy    User     @relation("CommentCreator", fields: [createdById], references: [id])
-  createdForId String   @db.ObjectId
-  createdFor   User     @relation("CommentRecipient", fields: [createdForId], references: [id])
-  taskId       String?  @db.ObjectId
-  task         Task?    @relation(fields: [taskId], references: [id])
+  entityType   CommentEntityType
+  entityId     String   @db.ObjectId
+  mentions     String[]
   createdAt    DateTime @default(now())
+}
+
+model CommentReadState {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  user       User     @relation(fields: [userId], references: [id])
+  entityType CommentEntityType
+  entityId   String   @db.ObjectId
+  lastReadAt DateTime @default(now())
+
+  @@unique([userId, entityType, entityId])
 }
 
 model Notification {

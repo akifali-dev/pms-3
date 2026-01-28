@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ActionButton from "@/components/ui/ActionButton";
 import Drawer from "@/components/ui/Drawer";
+import CommentThread from "@/components/comments/CommentThread";
 import { useToast } from "@/components/ui/ToastProvider";
 import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
 import { canMarkTaskDone, roles } from "@/lib/roles";
@@ -100,6 +101,16 @@ export default function TaskBoard({
       }
     });
     return Array.from(owners.entries()).map(([id, name]) => ({ id, name }));
+  }, [taskItems]);
+
+  const mentionUsers = useMemo(() => {
+    const users = new Map();
+    taskItems.forEach((task) => {
+      if (task.owner) {
+        users.set(task.owner.id, task.owner);
+      }
+    });
+    return Array.from(users.values());
   }, [taskItems]);
 
   const selectedTask = useMemo(
@@ -793,6 +804,18 @@ export default function TaskBoard({
                     PM review checklist for testing sign-off.
                   </p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                  Comments
+                </p>
+                <CommentThread
+                  entityType="TASK"
+                  entityId={selectedTask.id}
+                  currentUser={{ id: currentUserId }}
+                  users={mentionUsers}
+                />
               </div>
             </div>
 
