@@ -11,6 +11,7 @@ import {
 import { TASK_STATUSES } from "@/lib/kanban";
 import { getChecklistForTaskType } from "@/lib/taskChecklists";
 import { calculateTotalTimeSpent } from "@/lib/timeLogs";
+import { createNotification, getProjectMemberIds } from "@/lib/notifications";
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -235,6 +236,21 @@ export async function POST(request) {
         hoursSpent: 0,
         description: `Task created: ${createdTask.title} (${status}).`,
       },
+    });
+
+    const memberIds = await getProjectMemberIds(
+      createdTask.milestone?.projectId,
+      tx
+    );
+    await createNotification({
+      prismaClient: tx,
+      type: "CREATION_ASSIGNMENT",
+      actorId: context.user.id,
+      message: `${context.user?.name || context.user?.email || "A teammate"} created task ${createdTask.title}.`,
+      taskId: createdTask.id,
+      projectId: createdTask.milestone?.projectId ?? null,
+      milestoneId: createdTask.milestone?.id ?? null,
+      recipientIds: memberIds.length ? memberIds : [createdTask.ownerId],
     });
 
     return tx.task.findUnique({

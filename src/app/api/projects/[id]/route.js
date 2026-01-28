@@ -9,6 +9,7 @@ import {
   isAdminRole,
   PROJECT_MANAGEMENT_ROLES,
 } from "@/lib/api";
+import { createNotification } from "@/lib/notifications";
 
 async function getProjectWithAccess(projectId) {
   return prisma.project.findUnique({
@@ -108,7 +109,9 @@ async function handleProjectUpdate(request, { params }) {
     return buildError("No valid updates provided.", 400);
   }
 
+  const existingMemberIds = project.members?.map((member) => member.userId) ?? [];
   let memberIdsUpdate = null;
+  let addedMemberIds = [];
   if (incomingMemberIds !== null) {
     const uniqueMemberIds = Array.from(
       new Set([project.createdById, ...incomingMemberIds])
@@ -120,6 +123,9 @@ async function handleProjectUpdate(request, { params }) {
       return buildError("One or more project members were not found.", 404);
     }
     memberIdsUpdate = uniqueMemberIds;
+    addedMemberIds = uniqueMemberIds.filter(
+      (memberId) => !existingMemberIds.includes(memberId)
+    );
   }
 
   const updated = await prisma.project.update({
@@ -150,6 +156,16 @@ async function handleProjectUpdate(request, { params }) {
       },
     },
   });
+
+  if (addedMemberIds.length) {
+    await createNotification({
+      type: "CREATION_ASSIGNMENT",
+      actorId: context.user.id,
+      message: `${context.user?.name || context.user?.email || "A teammate"} added you to project ${updated.name}.`,
+      projectId: updated.id,
+      recipientIds: addedMemberIds,
+    });
+  }
 
   return buildSuccess("Project updated.", {
     project: {
