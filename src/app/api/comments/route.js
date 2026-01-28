@@ -3,11 +3,41 @@ import {
   buildError,
   buildSuccess,
   ensureAuthenticated,
-  ensureRole,
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
 import { createNotification, getTaskMemberIds } from "@/lib/notifications";
+
+const normalizeEntityType = (value) => value?.toString().trim().toUpperCase();
+
+const isValidEntityType = (entityType) =>
+  ["TASK", "MANUAL_LOG"].includes(entityType);
+
+async function getAccessibleTaskIds(context, ids) {
+  const tasks = await prisma.task.findMany({
+    where: {
+      ...(ids?.length ? { id: { in: ids } } : {}),
+      milestone: {
+        project: {
+          members: { some: { userId: context.user.id } },
+        },
+      },
+    },
+    select: { id: true },
+  });
+  return tasks.map((task) => task.id);
+}
+
+async function getAccessibleManualLogIds(context, ids) {
+  const logs = await prisma.activityLog.findMany({
+    where: {
+      ...(ids?.length ? { id: { in: ids } } : {}),
+      userId: context.user.id,
+    },
+    select: { id: true },
+  });
+  return logs.map((log) => log.id);
+}
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -17,40 +47,71 @@ export async function GET(request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const createdById = searchParams.get("createdById");
-  const createdForId = searchParams.get("createdForId");
-  const taskId = searchParams.get("taskId");
+  const entityType = normalizeEntityType(searchParams.get("entityType"));
+  const entityId = searchParams.get("entityId");
+  const entityIdsParam = searchParams.get("entityIds");
 
-  const where = {};
+  if (!entityType || !isValidEntityType(entityType)) {
+    return buildError("Entity type must be TASK or MANUAL_LOG.", 400);
+  }
 
-  if (isAdminRole(context.role)) {
-    if (createdById) {
-      where.createdById = createdById;
+  const entityIds = entityId
+    ? [entityId]
+    : entityIdsParam
+        ?.split(",")
+        .map((id) => id.trim())
+        .filter(Boolean) ?? [];
+
+  let accessibleIds = entityIds;
+
+  if (!isAdminRole(context.role)) {
+    if (entityType === "TASK") {
+      accessibleIds = await getAccessibleTaskIds(
+        context,
+        entityIds.length ? entityIds : null
+      );
+    } else {
+      accessibleIds = await getAccessibleManualLogIds(
+        context,
+        entityIds.length ? entityIds : null
+      );
     }
-    if (createdForId) {
-      where.createdForId = createdForId;
-    }
-    if (taskId) {
-      where.taskId = taskId;
-    }
-  } else {
-    where.OR = [
-      { createdById: context.user.id },
-      { createdForId: context.user.id },
-    ];
+  }
+
+  if (!isAdminRole(context.role) && accessibleIds.length === 0) {
+    return buildSuccess("Comments loaded.", { comments: [] });
   }
 
   const comments = await prisma.comment.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
+    where: {
+      entityType,
+      ...(accessibleIds.length
+        ? { entityId: { in: accessibleIds } }
+        : {}),
+    },
+    orderBy: { createdAt: "asc" },
     include: {
       createdBy: { select: { id: true, name: true, email: true, role: true } },
-      createdFor: { select: { id: true, name: true, email: true, role: true } },
-      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 
-  return buildSuccess("Comments loaded.", { comments });
+  let readState = null;
+  if (entityId) {
+    readState = await prisma.commentReadState.findUnique({
+      where: {
+        userId_entityType_entityId: {
+          userId: context.user.id,
+          entityType,
+          entityId,
+        },
+      },
+    });
+  }
+
+  return buildSuccess("Comments loaded.", {
+    comments,
+    readState: readState ? { lastReadAt: readState.lastReadAt } : null,
+  });
 }
 
 export async function POST(request) {
@@ -60,81 +121,98 @@ export async function POST(request) {
     return authError;
   }
 
-  const roleError = ensureRole(context.role, ["PM", "CTO"]);
-  if (roleError) {
-    return roleError;
-  }
-
   const body = await request.json();
   const message = body?.message?.trim();
-  const createdForId = body?.createdForId;
-  const taskId = body?.taskId;
+  const entityType = normalizeEntityType(body?.entityType);
+  const entityId = body?.entityId;
+  const mentions = Array.isArray(body?.mentions) ? body.mentions : [];
 
   if (!message) {
     return buildError("Message is required.", 400);
   }
 
-  let resolvedRecipientId = createdForId;
-  let resolvedTaskId = taskId;
+  if (!entityType || !isValidEntityType(entityType)) {
+    return buildError("Entity type must be TASK or MANUAL_LOG.", 400);
+  }
 
-  if (taskId) {
+  if (!entityId) {
+    return buildError("Entity id is required.", 400);
+  }
+
+  let notificationRecipientIds = [];
+  let notificationMessage = "left a comment.";
+
+  if (entityType === "TASK") {
     const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      select: { id: true, ownerId: true },
+      where: { id: entityId },
+      select: {
+        id: true,
+        title: true,
+        ownerId: true,
+        milestone: {
+          select: { project: { select: { members: { select: { userId: true } } } } },
+        },
+      },
     });
 
     if (!task) {
       return buildError("Task not found.", 404);
     }
 
-    resolvedTaskId = task.id;
-    resolvedRecipientId = task.ownerId;
-  } else if (createdForId) {
-    const recipient = await prisma.user.findUnique({
-      where: { id: createdForId },
-      select: { id: true },
+    const isMember = task.milestone?.project?.members?.some(
+      (member) => member.userId === context.user.id
+    );
+    if (!isMember && !isAdminRole(context.role)) {
+      return buildError("You do not have permission to comment on this task.", 403);
+    }
+
+    notificationRecipientIds = await getTaskMemberIds(task.id);
+    notificationMessage = `commented on ${task.title}.`;
+  } else {
+    const log = await prisma.activityLog.findUnique({
+      where: { id: entityId },
+      select: { id: true, userId: true },
     });
 
-    if (!recipient) {
-      return buildError("Recipient not found.", 404);
+    if (!log) {
+      return buildError("Manual log not found.", 404);
     }
-  }
 
-  if (!resolvedRecipientId) {
-    return buildError("Recipient is required.", 400);
+    if (log.userId !== context.user.id && !isAdminRole(context.role)) {
+      return buildError("You do not have permission to comment on this log.", 403);
+    }
+
+    notificationRecipientIds = log.userId ? [log.userId] : [];
+    notificationMessage = "commented on a manual log.";
   }
 
   const comment = await prisma.comment.create({
     data: {
       message,
       createdById: context.user.id,
-      createdForId: resolvedRecipientId,
-      taskId: resolvedTaskId ?? null,
+      entityType,
+      entityId,
+      mentions,
     },
     include: {
       createdBy: { select: { id: true, name: true, email: true, role: true } },
-      createdFor: { select: { id: true, name: true, email: true, role: true } },
-      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 
   const actorName = context.user?.name || context.user?.email || "A teammate";
-  const taskMemberIds = resolvedTaskId
-    ? await getTaskMemberIds(resolvedTaskId)
-    : [];
   const recipientIds = Array.from(
-    new Set([resolvedRecipientId, ...taskMemberIds].filter(Boolean))
+    new Set(notificationRecipientIds.filter(Boolean))
   );
 
-  await createNotification({
-    type: "USER_LOG_COMMENT",
-    actorId: context.user.id,
-    message: comment.task
-      ? `${actorName} commented on ${comment.task.title}.`
-      : `${actorName} left a comment.`,
-    taskId: comment.task?.id ?? null,
-    recipientIds,
-  });
+  if (recipientIds.length) {
+    await createNotification({
+      type: "USER_LOG_COMMENT",
+      actorId: context.user.id,
+      message: `${actorName} ${notificationMessage}`,
+      taskId: entityType === "TASK" ? entityId : null,
+      recipientIds,
+    });
+  }
 
   return buildSuccess("Comment created.", { comment }, 201);
 }

@@ -12,7 +12,6 @@ export default async function ActivityPage() {
   let currentUser = null;
   let users = [];
   let activityLogs = [];
-  let comments = [];
 
   if (hasDatabase && session?.email) {
     currentUser = await prisma.user.findUnique({
@@ -37,37 +36,14 @@ export default async function ActivityPage() {
         },
       });
 
-      comments = await prisma.comment.findMany({
-        where: isAdmin
-          ? {}
-          : {
-              OR: [
-                { createdById: currentUser.id },
-                { createdForId: currentUser.id },
-              ],
-            },
-        orderBy: { createdAt: "desc" },
-        include: {
-          createdBy: {
-            select: { id: true, name: true, email: true, role: true },
-          },
-          createdFor: {
-            select: { id: true, name: true, email: true, role: true },
-          },
-          task: { select: { id: true, title: true, ownerId: true } },
-        },
-      });
-
     }
   }
 
   return (
     <ActivityDashboard
       initialLogs={activityLogs}
-      initialComments={comments}
       users={users}
       currentUser={currentUser}
-      role={role}
     />
   );
 }

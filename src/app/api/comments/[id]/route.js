@@ -4,7 +4,6 @@ import {
   buildError,
   buildSuccess,
   ensureAuthenticated,
-  ensureRole,
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
@@ -14,25 +13,49 @@ async function getComment(commentId) {
     where: { id: commentId },
     include: {
       createdBy: { select: { id: true, name: true, email: true, role: true } },
-      createdFor: { select: { id: true, name: true, email: true, role: true } },
-      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 }
 
-function canAccessComment(context, comment) {
-  if (!comment) {
-    return false;
-  }
-
+async function canAccessEntity(context, entityType, entityId) {
   if (isAdminRole(context.role)) {
     return true;
   }
 
-  return (
-    comment.createdById === context.user.id ||
-    comment.createdForId === context.user.id
-  );
+  if (entityType === "TASK") {
+    const task = await prisma.task.findUnique({
+      where: { id: entityId },
+      select: {
+        id: true,
+        milestone: {
+          select: {
+            project: { select: { members: { select: { userId: true } } } },
+          },
+        },
+      },
+    });
+
+    return Boolean(
+      task?.milestone?.project?.members?.some(
+        (member) => member.userId === context.user.id
+      )
+    );
+  }
+
+  const log = await prisma.activityLog.findUnique({
+    where: { id: entityId },
+    select: { userId: true },
+  });
+
+  return log?.userId === context.user.id;
+}
+
+async function canAccessComment(context, comment) {
+  if (!comment) {
+    return false;
+  }
+
+  return canAccessEntity(context, comment.entityType, comment.entityId);
 }
 
 export async function GET(request, { params }) {
@@ -52,7 +75,7 @@ export async function GET(request, { params }) {
     return buildError("Comment not found.", 404);
   }
 
-  if (!canAccessComment(context, comment)) {
+  if (!(await canAccessComment(context, comment))) {
     return buildError("You do not have permission to view this comment.", 403);
   }
 
@@ -64,11 +87,6 @@ export async function PATCH(request, { params }) {
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
-  }
-
-  const roleError = ensureRole(context.role, ["PM", "CTO"]);
-  if (roleError) {
-    return roleError;
   }
 
   const commentId = params?.id;
@@ -97,8 +115,6 @@ export async function PATCH(request, { params }) {
     data: { message },
     include: {
       createdBy: { select: { id: true, name: true, email: true, role: true } },
-      createdFor: { select: { id: true, name: true, email: true, role: true } },
-      task: { select: { id: true, title: true, ownerId: true } },
     },
   });
 
@@ -110,11 +126,6 @@ export async function DELETE(request, { params }) {
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
-  }
-
-  const roleError = ensureRole(context.role, ["PM", "CTO"]);
-  if (roleError) {
-    return roleError;
   }
 
   const commentId = params?.id;
