@@ -74,6 +74,7 @@ model Project {
   createdBy   User        @relation("ProjectCreator", fields: [createdById], references: [id])
   members     ProjectMember[]
   milestones  Milestone[]
+  notifications Notification[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -97,6 +98,7 @@ model Milestone {
   projectId String   @db.ObjectId
   project   Project  @relation(fields: [projectId], references: [id])
   tasks     Task[]
+  notifications Notification[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -120,6 +122,7 @@ model Task {
   timeLogs       TaskTimeLog[]
   activityLogs   ActivityLog[]
   comments       Comment[]
+  notifications  Notification[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
