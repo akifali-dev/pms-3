@@ -18,7 +18,10 @@ async function getProjectWithAccess(projectId) {
         select: { id: true, name: true, email: true, role: true },
       },
       members: {
-        select: { id: true, name: true, email: true, role: true },
+        select: {
+          userId: true,
+          user: { select: { id: true, name: true, email: true, role: true } },
+        },
       },
     },
   });
@@ -30,10 +33,12 @@ function canAccessProject(context, project) {
   }
 
   if (isAdminRole(context.role)) {
-    return project.memberIds?.includes(context.user.id);
+    return project.members?.some(
+      (member) => member.userId === context.user.id
+    );
   }
 
-  return project.memberIds?.includes(context.user.id);
+  return project.members?.some((member) => member.userId === context.user.id);
 }
 
 export async function GET(request, { params }) {
@@ -59,7 +64,12 @@ export async function GET(request, { params }) {
     return buildError("You do not have permission to view this project.", 403);
   }
 
-  return buildSuccess("Project loaded.", { project });
+  return buildSuccess("Project loaded.", {
+    project: {
+      ...project,
+      members: project.members.map((member) => member.user),
+    },
+  });
 }
 
 async function handleProjectUpdate(request, { params }) {
@@ -119,19 +129,34 @@ async function handleProjectUpdate(request, { params }) {
       ...(description !== undefined
         ? { description: description || null }
         : {}),
-      ...(memberIdsUpdate ? { memberIds: memberIdsUpdate } : {}),
+      ...(memberIdsUpdate
+        ? {
+            members: {
+              deleteMany: {},
+              create: memberIdsUpdate.map((userId) => ({ userId })),
+            },
+          }
+        : {}),
     },
     include: {
       createdBy: {
         select: { id: true, name: true, email: true, role: true },
       },
       members: {
-        select: { id: true, name: true, email: true, role: true },
+        select: {
+          userId: true,
+          user: { select: { id: true, name: true, email: true, role: true } },
+        },
       },
     },
   });
 
-  return buildSuccess("Project updated.", { project: updated });
+  return buildSuccess("Project updated.", {
+    project: {
+      ...updated,
+      members: updated.members.map((member) => member.user),
+    },
+  });
 }
 
 export async function PUT(request, context) {
@@ -188,6 +213,7 @@ export async function DELETE(request, { params }) {
         where: milestoneIds.length ? { milestoneId: { in: milestoneIds } } : {},
       }),
       prisma.milestone.deleteMany({ where: { projectId } }),
+      prisma.projectMember.deleteMany({ where: { projectId } }),
       prisma.project.delete({ where: { id: projectId } }),
     ]);
 

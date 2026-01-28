@@ -20,7 +20,7 @@ export async function GET(request) {
   const createdById = searchParams.get("createdById");
 
   const where = {
-    memberIds: { has: context.user.id },
+    members: { some: { userId: context.user.id } },
   };
   if (isAdminRole(context.role) && createdById) {
     where.createdById = createdById;
@@ -34,12 +34,19 @@ export async function GET(request) {
         select: { id: true, name: true, email: true, role: true },
       },
       members: {
-        select: { id: true, name: true, email: true, role: true },
+        select: {
+          user: { select: { id: true, name: true, email: true, role: true } },
+        },
       },
     },
   });
 
-  return buildSuccess("Projects loaded.", { projects });
+  return buildSuccess("Projects loaded.", {
+    projects: projects.map((project) => ({
+      ...project,
+      members: project.members.map((member) => member.user),
+    })),
+  });
 }
 
 export async function POST(request) {
@@ -82,17 +89,30 @@ export async function POST(request) {
       name,
       description: description || null,
       createdById: context.user.id,
-      memberIds: uniqueMemberIds,
+      members: {
+        create: uniqueMemberIds.map((userId) => ({ userId })),
+      },
     },
     include: {
       createdBy: {
         select: { id: true, name: true, email: true, role: true },
       },
       members: {
-        select: { id: true, name: true, email: true, role: true },
+        select: {
+          user: { select: { id: true, name: true, email: true, role: true } },
+        },
       },
     },
   });
 
-  return buildSuccess("Project created.", { project }, 201);
+  return buildSuccess(
+    "Project created.",
+    {
+      project: {
+        ...project,
+        members: project.members.map((member) => member.user),
+      },
+    },
+    201
+  );
 }

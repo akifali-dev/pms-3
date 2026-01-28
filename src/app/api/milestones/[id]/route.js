@@ -15,7 +15,11 @@ async function getMilestone(milestoneId) {
     where: { id: milestoneId },
     include: {
       project: {
-        select: { id: true, name: true, memberIds: true },
+        select: {
+          id: true,
+          name: true,
+          members: { select: { userId: true } },
+        },
       },
     },
   });
@@ -27,10 +31,14 @@ function canAccessMilestone(context, milestone) {
   }
 
   if (isAdminRole(context.role)) {
-    return milestone.project.memberIds?.includes(context.user.id);
+    return milestone.project.members?.some(
+      (member) => member.userId === context.user.id
+    );
   }
 
-  return milestone.project.memberIds?.includes(context.user.id);
+  return milestone.project.members?.some(
+    (member) => member.userId === context.user.id
+  );
 }
 
 export async function GET(request, { params }) {

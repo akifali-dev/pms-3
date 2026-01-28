@@ -32,14 +32,21 @@ export async function GET(request) {
 
   const milestone = await prisma.milestone.findUnique({
     where: { id: milestoneId },
-    select: { id: true, project: { select: { memberIds: true } } },
+    select: {
+      id: true,
+      project: { select: { members: { select: { userId: true } } } },
+    },
   });
 
   if (!milestone) {
     return buildError("Milestone not found.", 404);
   }
 
-  if (!milestone.project.memberIds?.includes(context.user.id)) {
+  if (
+    !milestone.project.members?.some(
+      (member) => member.userId === context.user.id
+    )
+  ) {
     return buildError("You do not have permission to view these tasks.", 403);
   }
 
@@ -126,14 +133,21 @@ export async function POST(request) {
 
   const milestone = await prisma.milestone.findUnique({
     where: { id: milestoneId },
-    select: { id: true, project: { select: { memberIds: true } } },
+    select: {
+      id: true,
+      project: { select: { members: { select: { userId: true } } } },
+    },
   });
 
   if (!milestone) {
     return buildError("Milestone not found.", 404);
   }
 
-  if (!milestone.project.memberIds?.includes(context.user.id)) {
+  if (
+    !milestone.project.members?.some(
+      (member) => member.userId === context.user.id
+    )
+  ) {
     return buildError("You do not have permission to add tasks.", 403);
   }
 

@@ -21,7 +21,7 @@ async function getTask(taskId) {
           id: true,
           title: true,
           projectId: true,
-          project: { select: { memberIds: true } },
+          project: { select: { members: { select: { userId: true } } } },
         },
       },
       checklistItems: true,
@@ -37,7 +37,11 @@ function canAccessTask(context, task) {
     return false;
   }
 
-  if (!task.milestone?.project?.memberIds?.includes(context.user.id)) {
+  if (
+    !task.milestone?.project?.members?.some(
+      (member) => member.userId === context.user.id
+    )
+  ) {
     return false;
   }
 

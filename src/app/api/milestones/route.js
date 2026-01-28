@@ -24,7 +24,7 @@ export async function GET(request) {
     where.projectId = projectId;
   }
 
-  where.project = { memberIds: { has: context.user.id } };
+  where.project = { members: { some: { userId: context.user.id } } };
 
   const milestones = await prisma.milestone.findMany({
     where,
@@ -70,14 +70,14 @@ export async function POST(request) {
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, memberIds: true },
+    select: { id: true, members: { select: { userId: true } } },
   });
 
   if (!project) {
     return buildError("Project not found.", 404);
   }
 
-  if (!project.memberIds?.includes(context.user.id)) {
+  if (!project.members?.some((member) => member.userId === context.user.id)) {
     return buildError("You do not have permission to add milestones.", 403);
   }
 
