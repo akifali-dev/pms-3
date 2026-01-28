@@ -8,6 +8,7 @@ import {
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
+import { createNotification, getProjectMemberIds } from "@/lib/notifications";
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -93,6 +94,16 @@ export async function POST(request) {
         select: { id: true, name: true },
       },
     },
+  });
+
+  const memberIds = await getProjectMemberIds(projectId);
+  await createNotification({
+    type: "CREATION_ASSIGNMENT",
+    actorId: context.user.id,
+    message: `${context.user?.name || context.user?.email || "A teammate"} created milestone ${milestone.title}.`,
+    milestoneId: milestone.id,
+    projectId,
+    recipientIds: memberIds,
   });
 
   return buildSuccess("Milestone created.", { milestone }, 201);

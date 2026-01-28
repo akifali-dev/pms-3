@@ -8,6 +8,7 @@ import { getRoleById } from "@/lib/roles";
 import AccessDeniedToast from "@/components/layout/AccessDeniedToast";
 import { useToast } from "@/components/ui/ToastProvider";
 import useOutsideClick from "@/hooks/useOutsideClick";
+import NotificationDrawer from "@/components/notifications/NotificationDrawer";
 
 const SIDEBAR_STATE_KEY = "pms.sidebar.collapsed";
 
@@ -16,6 +17,8 @@ export default function AppShell({ children, session }) {
   const { addToast } = useToast();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const profileRef = useRef(null);
   const role = getRoleById(session?.role);
   const roleLabel = role?.label ?? "Guest";
@@ -71,8 +74,9 @@ export default function AppShell({ children, session }) {
           <ThemeToggle />
           <button
             type="button"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)]"
+            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)]"
             aria-label="Notifications"
+            onClick={() => setIsNotificationsOpen(true)}
           >
             <svg
               viewBox="0 0 24 24"
@@ -93,6 +97,11 @@ export default function AppShell({ children, session }) {
                 strokeLinejoin="round"
               />
             </svg>
+            {unreadNotifications > 0 ? (
+              <span className="absolute -right-1 -top-1 inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-[color:var(--color-accent)] px-1 text-[10px] font-semibold text-white">
+                {unreadNotifications}
+              </span>
+            ) : null}
           </button>
           <div className="relative" ref={profileRef}>
             <button
@@ -148,6 +157,12 @@ export default function AppShell({ children, session }) {
           {children}
         </div>
       </main>
+
+      <NotificationDrawer
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        onUnreadChange={setUnreadNotifications}
+      />
     </div>
   );
 }

@@ -8,6 +8,10 @@ import {
 } from "@/lib/api";
 import { getStatusLabel, isValidTransition } from "@/lib/kanban";
 import { calculateTotalTimeSpent } from "@/lib/timeLogs";
+import {
+  createNotification,
+  getLeadershipUserIds,
+} from "@/lib/notifications";
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -207,6 +211,18 @@ export async function PATCH(request, { params }) {
         hoursSpent: 0,
         description: `Task status updated by ${actorName}: ${task.title} moved from ${task.status ?? "new"} to ${nextStatus}.`,
       },
+    });
+
+    const leaderIds = await getLeadershipUserIds(tx);
+    await createNotification({
+      prismaClient: tx,
+      type: "TASK_MOVEMENT",
+      actorId: context.user.id,
+      message: `${actorName} moved ${task.title} from ${task.status ?? "new"} to ${nextStatus}.`,
+      taskId,
+      projectId: task.milestone?.projectId ?? null,
+      milestoneId: task.milestone?.id ?? null,
+      recipientIds: [task.ownerId, ...leaderIds],
     });
 
     return tx.task.findUnique({

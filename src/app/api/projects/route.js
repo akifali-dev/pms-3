@@ -8,6 +8,7 @@ import {
   isAdminRole,
   PROJECT_MANAGEMENT_ROLES,
 } from "@/lib/api";
+import { createNotification } from "@/lib/notifications";
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -103,6 +104,14 @@ export async function POST(request) {
         },
       },
     },
+  });
+
+  await createNotification({
+    type: "CREATION_ASSIGNMENT",
+    actorId: context.user.id,
+    message: `${context.user?.name || context.user?.email || "A teammate"} created project ${project.name}.`,
+    projectId: project.id,
+    recipientIds: uniqueMemberIds,
   });
 
   return buildSuccess(

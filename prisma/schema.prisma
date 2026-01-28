@@ -40,6 +40,12 @@ enum ActivityCategory {
   TASK
 }
 
+enum NotificationType {
+  TASK_MOVEMENT
+  CREATION_ASSIGNMENT
+  USER_LOG_COMMENT
+}
+
 model User {
   id               String        @id @default(auto()) @map("_id") @db.ObjectId
   name             String
@@ -56,6 +62,8 @@ model User {
   statusChanges    TaskStatusHistory[] @relation("TaskStatusHistoryChangedBy")
   commentsWritten  Comment[]     @relation("CommentCreator")
   commentsReceived Comment[]     @relation("CommentRecipient")
+  notificationsAuthored Notification[] @relation("NotificationActor")
+  notificationRecipients NotificationRecipient[]
 }
 
 model Project {
@@ -167,4 +175,32 @@ model Comment {
   taskId       String?  @db.ObjectId
   task         Task?    @relation(fields: [taskId], references: [id])
   createdAt    DateTime @default(now())
+}
+
+model Notification {
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  type        NotificationType
+  actorId     String            @db.ObjectId
+  actor       User              @relation("NotificationActor", fields: [actorId], references: [id])
+  message     String
+  taskId      String?           @db.ObjectId
+  task        Task?             @relation(fields: [taskId], references: [id])
+  projectId   String?           @db.ObjectId
+  project     Project?          @relation(fields: [projectId], references: [id])
+  milestoneId String?           @db.ObjectId
+  milestone   Milestone?        @relation(fields: [milestoneId], references: [id])
+  createdAt   DateTime          @default(now())
+  recipients  NotificationRecipient[]
+}
+
+model NotificationRecipient {
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  notificationId String        @db.ObjectId
+  notification   Notification  @relation(fields: [notificationId], references: [id])
+  userId         String        @db.ObjectId
+  user           User          @relation(fields: [userId], references: [id])
+  readAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@unique([notificationId, userId])
 }

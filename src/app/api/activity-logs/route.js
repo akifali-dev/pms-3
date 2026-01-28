@@ -8,6 +8,7 @@ import {
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
+import { createNotification, getTaskMemberIds } from "@/lib/notifications";
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -86,6 +87,7 @@ export async function POST(request) {
   const date = body?.date ? new Date(body.date) : new Date();
   const hoursSpent = Number(body?.hoursSpent ?? 0);
   const category = body?.category?.toString().trim().toUpperCase();
+  const taskId = body?.taskId;
 
   if (!Number.isFinite(hoursSpent) || hoursSpent < 0) {
     return buildError("Hours spent must be a valid number.", 400);
@@ -106,6 +108,29 @@ export async function POST(request) {
     );
   }
 
+  if (taskId) {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        milestone: {
+          select: { project: { select: { members: { select: { userId: true } } } } },
+        },
+      },
+    });
+
+    if (!task) {
+      return buildError("Task not found.", 404);
+    }
+
+    const isMember = task.milestone?.project?.members?.some(
+      (member) => member.userId === context.user.id
+    );
+    if (!isMember) {
+      return buildError("You do not have permission to log time for this task.", 403);
+    }
+  }
+
   const activityLog = await prisma.activityLog.create({
     data: {
       description,
@@ -113,12 +138,25 @@ export async function POST(request) {
       hoursSpent,
       userId: context.user.id,
       category,
+      taskId: taskId ?? null,
     },
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
       task: { select: { id: true, title: true, ownerId: true } },
     },
   });
+
+  if (activityLog.taskId) {
+    const actorName = context.user?.name || context.user?.email || "A teammate";
+    const taskMemberIds = await getTaskMemberIds(activityLog.taskId);
+    await createNotification({
+      type: "USER_LOG_COMMENT",
+      actorId: context.user.id,
+      message: `${actorName} logged activity on ${activityLog.task?.title ?? "a task"}.`,
+      taskId: activityLog.taskId,
+      recipientIds: taskMemberIds,
+    });
+  }
 
   return buildSuccess("Activity log created.", { activityLog }, 201);
 }
