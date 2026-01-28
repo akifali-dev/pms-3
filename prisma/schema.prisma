@@ -66,6 +66,7 @@ model User {
   activityLogs     ActivityLog[]
   statusChanges    TaskStatusHistory[] @relation("TaskStatusHistoryChangedBy")
   commentsWritten  Comment[]     @relation("CommentCreator")
+  commentReadStates CommentReadState[]
   notificationsAuthored Notification[] @relation("NotificationActor")
   notificationRecipients NotificationRecipient[]
 }
