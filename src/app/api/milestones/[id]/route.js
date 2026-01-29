@@ -8,6 +8,7 @@ import {
   ensureRole,
   getAuthContext,
   isAdminRole,
+  isManagementRole,
 } from "@/lib/api";
 
 async function getMilestone(milestoneId) {
@@ -30,10 +31,8 @@ function canAccessMilestone(context, milestone) {
     return false;
   }
 
-  if (isAdminRole(context.role)) {
-    return milestone.project.members?.some(
-      (member) => member.userId === context.user.id
-    );
+  if (isManagementRole(context.role)) {
+    return true;
   }
 
   return milestone.project.members?.some(

@@ -1,15 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import {
-  PROJECT_MANAGEMENT_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
   getAuthContext,
 } from "@/lib/api";
-
-function isLeader(role) {
-  return PROJECT_MANAGEMENT_ROLES.includes(role);
-}
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -17,11 +12,6 @@ async function getTask(taskId) {
     select: {
       id: true,
       ownerId: true,
-      milestone: {
-        select: {
-          project: { select: { members: { select: { userId: true } } } },
-        },
-      },
     },
   });
 }
@@ -29,15 +19,6 @@ async function getTask(taskId) {
 function canManageBreak(context, task) {
   if (!task) {
     return false;
-  }
-  const isMember = task.milestone?.project?.members?.some(
-    (member) => member.userId === context.user.id
-  );
-  if (!isMember) {
-    return false;
-  }
-  if (isLeader(context.role)) {
-    return true;
   }
   return task.ownerId === context.user.id;
 }

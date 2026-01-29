@@ -6,7 +6,7 @@ import {
   ensureAuthenticated,
   ensureRole,
   getAuthContext,
-  isAdminRole,
+  isManagementRole,
 } from "@/lib/api";
 import { createNotification, getProjectMemberIds } from "@/lib/notifications";
 
@@ -25,7 +25,9 @@ export async function GET(request) {
     where.projectId = projectId;
   }
 
-  where.project = { members: { some: { userId: context.user.id } } };
+  if (!isManagementRole(context.role)) {
+    where.project = { members: { some: { userId: context.user.id } } };
+  }
 
   const milestones = await prisma.milestone.findMany({
     where,
@@ -78,8 +80,10 @@ export async function POST(request) {
     return buildError("Project not found.", 404);
   }
 
-  if (!project.members?.some((member) => member.userId === context.user.id)) {
-    return buildError("You do not have permission to add milestones.", 403);
+  if (!isManagementRole(context.role)) {
+    if (!project.members?.some((member) => member.userId === context.user.id)) {
+      return buildError("You do not have permission to add milestones.", 403);
+    }
   }
 
   const milestone = await prisma.milestone.create({

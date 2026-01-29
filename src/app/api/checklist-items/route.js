@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import {
-  ADMIN_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
-  ensureRole,
   getAuthContext,
   isAdminRole,
+  isManagementRole,
 } from "@/lib/api";
 
 export async function GET(request) {
@@ -46,10 +45,8 @@ export async function POST(request) {
     return authError;
   }
 
-  const allowedRoles = [...ADMIN_ROLES, "DEVELOPER"];
-  const roleError = ensureRole(context.role, allowedRoles);
-  if (roleError) {
-    return roleError;
+  if (!isManagementRole(context.role)) {
+    return buildError("Only PM/CTO can edit checklist items.", 403);
   }
 
   const body = await request.json();
