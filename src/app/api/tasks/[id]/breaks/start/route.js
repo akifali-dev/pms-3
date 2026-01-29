@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import {
-  PROJECT_MANAGEMENT_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
@@ -10,10 +9,6 @@ import {
 const ALLOWED_STATUSES = ["IN_PROGRESS", "DEV_TEST"];
 const BREAK_REASONS = ["NAMAZ", "MEAL", "REFRESHMENT", "OTHER"];
 
-function isLeader(role) {
-  return PROJECT_MANAGEMENT_ROLES.includes(role);
-}
-
 async function getTask(taskId) {
   return prisma.task.findUnique({
     where: { id: taskId },
@@ -21,11 +16,6 @@ async function getTask(taskId) {
       id: true,
       status: true,
       ownerId: true,
-      milestone: {
-        select: {
-          project: { select: { members: { select: { userId: true } } } },
-        },
-      },
     },
   });
 }
@@ -33,15 +23,6 @@ async function getTask(taskId) {
 function canManageBreak(context, task) {
   if (!task) {
     return false;
-  }
-  const isMember = task.milestone?.project?.members?.some(
-    (member) => member.userId === context.user.id
-  );
-  if (!isMember) {
-    return false;
-  }
-  if (isLeader(context.role)) {
-    return true;
   }
   return task.ownerId === context.user.id;
 }

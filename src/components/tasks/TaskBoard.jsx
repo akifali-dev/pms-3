@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import ActionButton from "@/components/ui/ActionButton";
 import Drawer from "@/components/ui/Drawer";
@@ -141,6 +141,9 @@ export default function TaskBoard({
     minutes: "",
     reason: "",
   });
+  const [timeRequests, setTimeRequests] = useState([]);
+  const [timeRequestsLoading, setTimeRequestsLoading] = useState(false);
+  const [timeRequestActionId, setTimeRequestActionId] = useState(null);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [breakForm, setBreakForm] = useState({
     reason: "NAMAZ",
@@ -186,6 +189,16 @@ export default function TaskBoard({
     [taskItems, selectedTaskId]
   );
 
+  const isManager = [roles.PM, roles.CTO].includes(role);
+
+  const isTaskOwner = (task) => {
+    if (!currentUserId || !task) {
+      return false;
+    }
+
+    return task.ownerId === currentUserId;
+  };
+
   useEffect(() => {
     if (selectedTask?.id) {
       const tab = searchParams?.get("tab") || "overview";
@@ -194,6 +207,25 @@ export default function TaskBoard({
       setBreakPanelOpen(false);
     }
   }, [selectedTask?.id, searchParams]);
+
+  useEffect(() => {
+    if (!selectedTask?.id) {
+      setTimeRequests([]);
+      return;
+    }
+    const isOwner = selectedTask.ownerId === currentUserId;
+    if (!isManager && !isOwner) {
+      setTimeRequests([]);
+      return;
+    }
+    loadTimeRequests(selectedTask.id);
+  }, [
+    selectedTask?.id,
+    selectedTask?.ownerId,
+    isManager,
+    currentUserId,
+    loadTimeRequests,
+  ]);
 
   useEffect(() => {
     if (!selectedTask) {
@@ -330,6 +362,27 @@ export default function TaskBoard({
     );
   };
 
+  const loadTimeRequests = useCallback(async (taskId) => {
+    if (!taskId) {
+      setTimeRequests([]);
+      return;
+    }
+    setTimeRequestsLoading(true);
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/time-requests`);
+      const data = await response.json();
+      if (response.ok) {
+        setTimeRequests(data?.requests ?? []);
+      } else {
+        setTimeRequests([]);
+      }
+    } catch (error) {
+      setTimeRequests([]);
+    } finally {
+      setTimeRequestsLoading(false);
+    }
+  }, []);
+
   const handleRequestTimeSubmit = async (task) => {
     if (!task) {
       return;
@@ -377,9 +430,54 @@ export default function TaskBoard({
       message: "PM/CTO have been notified.",
       variant: "success",
     });
+    setTimeRequests((prev) => [data.request, ...prev]);
     setTimeRequestForm({ hours: "", minutes: "", reason: "" });
     setTimeRequestOpen(false);
     setRequestSubmitting(false);
+  };
+
+  const handleReviewTimeRequest = async (request, nextStatus) => {
+    if (!request?.id || !selectedTask?.id) {
+      return;
+    }
+    setTimeRequestActionId(request.id);
+    const response = await fetch(`/api/time-requests/${request.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      addToast({
+        title: "Review failed",
+        message: data?.error ?? "Unable to review time request.",
+        variant: "error",
+      });
+      setTimeRequestActionId(null);
+      return;
+    }
+
+    setTimeRequests((prev) =>
+      prev.map((item) => (item.id === request.id ? data.request : item))
+    );
+
+    if (nextStatus === "APPROVED") {
+      const addedHours = Number(request.requestedSeconds ?? 0) / 3600;
+      updateTaskState(selectedTask.id, (item) => ({
+        ...item,
+        estimatedHours: (item.estimatedHours ?? 0) + addedHours,
+      }));
+    }
+
+    addToast({
+      title: "Request updated",
+      message:
+        nextStatus === "APPROVED"
+          ? "Extra time approved."
+          : "Request rejected.",
+      variant: "success",
+    });
+    setTimeRequestActionId(null);
   };
 
   const handlePause = async (task) => {
@@ -493,19 +591,15 @@ export default function TaskBoard({
     task.checklistItems.every((item) => item.isCompleted);
 
   const canEditTask = (task) => {
-    if (!currentUserId) {
-      return false;
-    }
-
-    return task.ownerId === currentUserId;
+    return Boolean(task) && isManager;
   };
 
-  const canEditChecklist = (task) => {
-    if (!currentUserId) {
+  const canToggleChecklist = (task) => {
+    if (!task) {
       return false;
     }
 
-    return task.ownerId === currentUserId;
+    return isManager || isTaskOwner(task);
   };
 
   const canMoveTaskForTask = (task) => {
@@ -519,6 +613,16 @@ export default function TaskBoard({
 
     return task.ownerId === currentUserId;
   };
+
+  const canRequestMoreTime = (task) => {
+    if (!task) {
+      return false;
+    }
+
+    return isTaskOwner(task) && [roles.DEV, roles.SENIOR_DEV].includes(role);
+  };
+
+  const canControlBreaks = (task) => isTaskOwner(task);
 
   const handleDragStart = (event, task) => {
     if (!canMoveTaskForTask(task)) {
@@ -986,7 +1090,7 @@ export default function TaskBoard({
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {canEditTask(selectedTask) ? (
+                    {canRequestMoreTime(selectedTask) ? (
                       <ActionButton
                         label="Request more time"
                         size="sm"
@@ -994,8 +1098,18 @@ export default function TaskBoard({
                         onClick={() => setTimeRequestOpen((prev) => !prev)}
                       />
                     ) : null}
-                    {["IN_PROGRESS", "DEV_TEST"].includes(selectedTask.status) &&
-                    canMoveTaskForTask(selectedTask) ? (
+                    {(() => {
+                      const isAllowedStatus = ["IN_PROGRESS", "DEV_TEST"].includes(
+                        selectedTask.status
+                      );
+                      const canControl = canControlBreaks(selectedTask);
+                      const isDisabled = !(isAllowedStatus && canControl);
+                      const tooltip = !canControl
+                        ? "Only the assigned developer can pause or resume time."
+                        : !isAllowedStatus
+                          ? "Breaks are only available when a task is in progress or in dev test."
+                          : undefined;
+                      return (
                       <ActionButton
                         label={selectedTask.activeBreak ? "Resume" : "Pause"}
                         size="sm"
@@ -1005,9 +1119,12 @@ export default function TaskBoard({
                             ? handleResume(selectedTask)
                             : setBreakPanelOpen((prev) => !prev)
                         }
+                        disabled={isDisabled || breakSubmitting}
+                        title={tooltip}
                         className={breakSubmitting ? "pointer-events-none opacity-60" : ""}
                       />
-                    ) : null}
+                      );
+                    })()}
                   </div>
                   {selectedTask.activeBreak ? (
                     <p className="mt-2 text-xs text-amber-400">
@@ -1089,6 +1206,98 @@ export default function TaskBoard({
                         }
                       />
                     </div>
+                  </div>
+                ) : null}
+
+                {selectedTask &&
+                (isManager || isTaskOwner(selectedTask)) ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                      Time requests
+                    </p>
+                    {timeRequestsLoading ? (
+                      <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
+                        Loading time requests...
+                      </p>
+                    ) : timeRequests.length ? (
+                      <ul className="mt-3 space-y-3 text-xs text-[color:var(--color-text-muted)]">
+                        {timeRequests.map((request) => {
+                          const isPending = request.status === "PENDING";
+                          const isActing = timeRequestActionId === request.id;
+                          return (
+                            <li
+                              key={request.id}
+                              className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] px-3 py-2"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-[color:var(--color-text)]">
+                                    {request.reason}
+                                  </p>
+                                  <p className="mt-1 text-[color:var(--color-text-subtle)]">
+                                    Requested{" "}
+                                    <span className="font-semibold text-[color:var(--color-text)]">
+                                      {formatDurationShort(
+                                        request.requestedSeconds
+                                      )}
+                                    </span>{" "}
+                                    by{" "}
+                                    {request.requestedBy?.name ??
+                                      request.requestedBy?.email ??
+                                      "Requester"}
+                                  </p>
+                                </div>
+                                <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                                  {request.status}
+                                </span>
+                              </div>
+                              {isManager && isPending ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <ActionButton
+                                    label="Approve"
+                                    size="sm"
+                                    variant="success"
+                                    onClick={() =>
+                                      handleReviewTimeRequest(
+                                        request,
+                                        "APPROVED"
+                                      )
+                                    }
+                                    disabled={isActing}
+                                    className={
+                                      isActing
+                                        ? "pointer-events-none opacity-60"
+                                        : ""
+                                    }
+                                  />
+                                  <ActionButton
+                                    label="Reject"
+                                    size="sm"
+                                    variant="danger"
+                                    onClick={() =>
+                                      handleReviewTimeRequest(
+                                        request,
+                                        "REJECTED"
+                                      )
+                                    }
+                                    disabled={isActing}
+                                    className={
+                                      isActing
+                                        ? "pointer-events-none opacity-60"
+                                        : ""
+                                    }
+                                  />
+                                </div>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
+                        No time requests yet.
+                      </p>
+                    )}
                   </div>
                 ) : null}
 
@@ -1195,7 +1404,7 @@ export default function TaskBoard({
                   <ul className="mt-3 space-y-2 text-xs text-[color:var(--color-text-muted)]">
                     {selectedTask.checklistItems.map((item) => {
                       const isUpdating = pendingChecklistId === item.id;
-                      const isEditable = canEditChecklist(selectedTask);
+                      const isEditable = canToggleChecklist(selectedTask);
                       return (
                         <li
                           key={item.id}

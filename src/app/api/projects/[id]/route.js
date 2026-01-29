@@ -6,7 +6,7 @@ import {
   ensureAuthenticated,
   ensureRole,
   getAuthContext,
-  isAdminRole,
+  isManagementRole,
   PROJECT_MANAGEMENT_ROLES,
 } from "@/lib/api";
 import { createNotification } from "@/lib/notifications";
@@ -33,10 +33,8 @@ function canAccessProject(context, project) {
     return false;
   }
 
-  if (isAdminRole(context.role)) {
-    return project.members?.some(
-      (member) => member.userId === context.user.id
-    );
+  if (isManagementRole(context.role)) {
+    return true;
   }
 
   return project.members?.some((member) => member.userId === context.user.id);

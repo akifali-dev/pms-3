@@ -1,13 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
-  ADMIN_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
-  ensureRole,
   getAuthContext,
   isAdminRole,
+  isManagementRole,
 } from "@/lib/api";
 
 async function getChecklistItem(itemId) {
@@ -89,10 +88,22 @@ export async function PATCH(request, { params }) {
   const updates = {};
 
   if (body?.label) {
+    if (!isManagementRole(context.role)) {
+      return buildError("Only PM/CTO can edit checklist items.", 403);
+    }
     updates.label = body.label.trim();
   }
 
   if (typeof body?.isCompleted === "boolean") {
+    if (
+      !isManagementRole(context.role) &&
+      item.task.ownerId !== context.user.id
+    ) {
+      return buildError(
+        "You do not have permission to update this checklist item.",
+        403
+      );
+    }
     updates.isCompleted = body.isCompleted;
   }
 
@@ -122,10 +133,8 @@ export async function DELETE(request, { params }) {
     return authError;
   }
 
-  const allowedRoles = [...ADMIN_ROLES, "DEVELOPER"];
-  const roleError = ensureRole(context.role, allowedRoles);
-  if (roleError) {
-    return roleError;
+  if (!isManagementRole(context.role)) {
+    return buildError("Only PM/CTO can edit checklist items.", 403);
   }
 
  

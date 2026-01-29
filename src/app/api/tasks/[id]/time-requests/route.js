@@ -1,15 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import {
-  PROJECT_MANAGEMENT_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
   getAuthContext,
 } from "@/lib/api";
-import { createNotification, getLeadershipUserIds } from "@/lib/notifications";
+import { createNotification } from "@/lib/notifications";
 
 function isLeader(role) {
-  return PROJECT_MANAGEMENT_ROLES.includes(role);
+  return ["PM", "CTO"].includes(role);
 }
 
 async function getTask(taskId) {
@@ -34,14 +33,14 @@ function canViewRequests(context, task) {
   if (!task) {
     return false;
   }
+  if (isLeader(context.role)) {
+    return true;
+  }
   const isMember = task.milestone?.project?.members?.some(
     (member) => member.userId === context.user.id
   );
   if (!isMember) {
     return false;
-  }
-  if (isLeader(context.role)) {
-    return true;
   }
   return task.ownerId === context.user.id;
 }
@@ -150,7 +149,11 @@ export async function POST(request, { params }) {
     },
   });
 
-  const leaderIds = await getLeadershipUserIds();
+  const leaders = await prisma.user.findMany({
+    where: { role: { in: ["PM", "CTO"] } },
+    select: { id: true },
+  });
+  const leaderIds = leaders.map((leader) => leader.id);
   const actorName = context.user?.name || context.user?.email || "A teammate";
   await createNotification({
     type: "TIME_REQUEST",

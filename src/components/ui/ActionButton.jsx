@@ -22,6 +22,7 @@ export default function ActionButton({
   className = "",
   type = "button",
   disabled = false,
+  title,
 }) {
   const { addToast } = useToast();
 
@@ -47,6 +48,7 @@ export default function ActionButton({
     <button
       type={type}
       disabled={disabled}
+      title={title}
       className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition ${
         sizes[size]
       } ${variants[variant]} ${disabled ? "opacity-60" : ""} ${className}`}

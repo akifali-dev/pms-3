@@ -111,3 +111,7 @@ export function parseBoolean(value) {
 export function isAdminRole(role) {
   return ADMIN_ROLES.includes(role);
 }
+
+export function isManagementRole(role) {
+  return ["PM", "CTO"].includes(role);
+}

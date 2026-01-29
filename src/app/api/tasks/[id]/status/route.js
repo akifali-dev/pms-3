@@ -4,7 +4,7 @@ import {
   buildSuccess,
   ensureAuthenticated,
   getAuthContext,
-  isAdminRole,
+  isManagementRole,
 } from "@/lib/api";
 import { getStatusLabel, isValidTransition } from "@/lib/kanban";
 import {
@@ -43,16 +43,16 @@ function canAccessTask(context, task) {
     return false;
   }
 
+  if (isManagementRole(context.role)) {
+    return true;
+  }
+
   if (
     !task.milestone?.project?.members?.some(
       (member) => member.userId === context.user.id
     )
   ) {
     return false;
-  }
-
-  if (isAdminRole(context.role)) {
-    return true;
   }
 
   return task.ownerId === context.user.id;
@@ -63,16 +63,16 @@ function canMoveTask(context, task) {
     return false;
   }
 
+  if (["PM", "CTO"].includes(context.role)) {
+    return true;
+  }
+
   if (
     !task.milestone?.project?.members?.some(
       (member) => member.userId === context.user.id
     )
   ) {
     return false;
-  }
-
-  if (["PM", "CTO"].includes(context.role)) {
-    return true;
   }
 
   return task.ownerId === context.user.id;

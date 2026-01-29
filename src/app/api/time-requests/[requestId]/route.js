@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import {
-  PROJECT_MANAGEMENT_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
@@ -11,7 +10,7 @@ import { createNotification } from "@/lib/notifications";
 const ALLOWED_STATUSES = ["APPROVED", "REJECTED"];
 
 function isLeader(role) {
-  return PROJECT_MANAGEMENT_ROLES.includes(role);
+  return ["PM", "CTO"].includes(role);
 }
 
 function formatDuration(seconds) {
