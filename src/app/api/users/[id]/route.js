@@ -26,7 +26,7 @@ export async function GET(request, { params }) {
     return authError;
   }
 
-  const userId = params?.id;
+  const { id: userId } = await params;
   if (!userId) {
     return buildError("User id is required.", 400);
   }
@@ -62,7 +62,7 @@ export async function PATCH(request, { params }) {
     return authError;
   }
 
-  const userId = params?.id;
+  const { id: userId } = await params;
   if (!userId) {
     return buildError("User id is required.", 400);
   }
@@ -145,7 +145,7 @@ export async function DELETE(request, { params }) {
     return roleError;
   }
 
-  const userId = params?.id;
+  const { id: userId } = await params;
   if (!userId) {
     return buildError("User id is required.", 400);
   }

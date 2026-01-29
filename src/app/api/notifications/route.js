@@ -6,10 +6,10 @@ import {
   getAuthContext,
 } from "@/lib/api";
 
-const TAB_TO_TYPE = {
-  taskMovement: "TASK_MOVEMENT",
-  creation: "CREATION_ASSIGNMENT",
-  log: "USER_LOG_COMMENT",
+const TAB_TO_TYPES = {
+  taskMovement: ["TASK_MOVEMENT"],
+  creation: ["CREATION_ASSIGNMENT", "TASK_ASSIGNED"],
+  log: ["USER_LOG_COMMENT"],
 };
 
 export async function GET(request) {
@@ -28,11 +28,11 @@ export async function GET(request) {
     return buildError("Limit must be a positive number.", 400);
   }
 
-  const typeFilter = TAB_TO_TYPE[tab] ?? null;
+  const typeFilter = TAB_TO_TYPES[tab] ?? null;
 
   const notifications = await prisma.notification.findMany({
     where: {
-      ...(typeFilter ? { type: typeFilter } : {}),
+      ...(typeFilter ? { type: { in: typeFilter } } : {}),
       recipients: { some: { userId: context.user.id } },
     },
     orderBy: { createdAt: "desc" },
@@ -60,7 +60,7 @@ export async function GET(request) {
     where: {
       userId: context.user.id,
       readAt: null,
-      notification: { type: "CREATION_ASSIGNMENT" },
+      notification: { type: { in: ["CREATION_ASSIGNMENT", "TASK_ASSIGNED"] } },
     },
   });
   const unreadLog = await prisma.notificationRecipient.count({

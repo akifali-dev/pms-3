@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { resolveTotalTimeSpent } from "@/lib/timeLogs";
 import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
+import { createNotification } from "@/lib/notifications";
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -41,6 +42,37 @@ function canAccessTask(context, task) {
   }
 
   return task.ownerId === context.user.id;
+}
+
+export async function GET(request, { params }) {
+  const { id: taskId } = await params;
+
+  const context = await getAuthContext();
+  const authError = ensureAuthenticated(context);
+  if (authError) {
+    return authError;
+  }
+
+  if (!taskId) {
+    return buildError("Task id is required.", 400);
+  }
+
+  const task = await getTask(taskId);
+  if (!task) {
+    return buildError("Task not found.", 404);
+  }
+
+  if (!canAccessTask(context, task)) {
+    return buildError("You do not have permission to view this task.", 403);
+  }
+
+  return buildSuccess("Task loaded.", {
+    task: {
+      ...task,
+      totalTimeSpent: resolveTotalTimeSpent(task),
+      activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
+    },
+  });
 }
 
 export async function PATCH(request, { params }) {
@@ -114,6 +146,8 @@ export async function PATCH(request, { params }) {
   const checklistItems = Array.isArray(body?.checklistItems)
     ? body.checklistItems
     : null;
+  const ownerChanged =
+    body?.ownerId !== undefined && body.ownerId !== task.ownerId;
 
   const updatedTask = await prisma.$transaction(async (tx) => {
     const updated = await tx.task.update({
@@ -164,7 +198,7 @@ export async function PATCH(request, { params }) {
       );
     }
 
-    return tx.task.findUnique({
+    const nextTask = await tx.task.findUnique({
       where: { id: taskId },
       include: {
         owner: { select: { id: true, name: true, email: true, role: true } },
@@ -178,6 +212,21 @@ export async function PATCH(request, { params }) {
         breaks: { orderBy: { startedAt: "desc" } },
       },
     });
+
+    if (ownerChanged && nextTask?.ownerId && nextTask.ownerId !== context.user.id) {
+      await createNotification({
+        prismaClient: tx,
+        type: "TASK_ASSIGNED",
+        actorId: context.user.id,
+        message: `${context.user?.name || context.user?.email || "A leader"} assigned you task ${nextTask.title}.`,
+        taskId: nextTask.id,
+        projectId: nextTask.milestone?.projectId ?? null,
+        milestoneId: nextTask.milestone?.id ?? null,
+        recipientIds: [nextTask.ownerId],
+      });
+    }
+
+    return nextTask;
   });
 
   return buildSuccess("Task updated.", {

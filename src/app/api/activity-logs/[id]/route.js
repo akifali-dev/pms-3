@@ -39,7 +39,7 @@ export async function GET(request, { params }) {
     return authError;
   }
 
-  const logId = params?.id;
+  const { id: logId } = await params;
   if (!logId) {
     return buildError("Activity log id is required.", 400);
   }
@@ -63,7 +63,7 @@ export async function PATCH(request, { params }) {
     return authError;
   }
 
-  const logId = params?.id;
+  const { id: logId } = await params;
   if (!logId) {
     return buildError("Activity log id is required.", 400);
   }
@@ -139,7 +139,7 @@ export async function DELETE(request, { params }) {
     return roleError;
   }
 
-  const logId = params?.id;
+  const { id: logId } = await params;
   if (!logId) {
     return buildError("Activity log id is required.", 400);
   }
