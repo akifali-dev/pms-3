@@ -199,6 +199,27 @@ export default function TaskBoard({
     return task.ownerId === currentUserId;
   };
 
+  const loadTimeRequests = useCallback(async (taskId) => {
+    if (!taskId) {
+      setTimeRequests([]);
+      return;
+    }
+    setTimeRequestsLoading(true);
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/time-requests`);
+      const data = await response.json();
+      if (response.ok) {
+        setTimeRequests(data?.requests ?? []);
+      } else {
+        setTimeRequests([]);
+      }
+    } catch (error) {
+      setTimeRequests([]);
+    } finally {
+      setTimeRequestsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (selectedTask?.id) {
       const tab = searchParams?.get("tab") || "overview";
@@ -361,27 +382,6 @@ export default function TaskBoard({
       prev.map((item) => (item.id === taskId ? updater(item) : item))
     );
   };
-
-  const loadTimeRequests = useCallback(async (taskId) => {
-    if (!taskId) {
-      setTimeRequests([]);
-      return;
-    }
-    setTimeRequestsLoading(true);
-    try {
-      const response = await fetch(`/api/tasks/${taskId}/time-requests`);
-      const data = await response.json();
-      if (response.ok) {
-        setTimeRequests(data?.requests ?? []);
-      } else {
-        setTimeRequests([]);
-      }
-    } catch (error) {
-      setTimeRequests([]);
-    } finally {
-      setTimeRequestsLoading(false);
-    }
-  }, []);
 
   const handleRequestTimeSubmit = async (task) => {
     if (!task) {
