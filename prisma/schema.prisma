@@ -69,6 +69,7 @@ model User {
   commentReadStates CommentReadState[]
   notificationsAuthored Notification[] @relation("NotificationActor")
   notificationRecipients NotificationRecipient[]
+  attendances      Attendance[]
 }
 
 model Project {
@@ -170,6 +171,23 @@ model ActivityLog {
   description String
   hoursSpent  Float
   category    ActivityCategory @default(TASK)
+}
+
+model Attendance {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  date      DateTime
+  inTime    DateTime?
+  outTime   DateTime?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@index([userId, date])
 }
 
 model Comment {
