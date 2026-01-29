@@ -42,6 +42,21 @@ const ICONS = {
       />
     </svg>
   ),
+  TASK_ASSIGNED: (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <path
+        d="M12 4v8m0 0h8m-8 0H4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
   USER_LOG_COMMENT: (
     <svg
       viewBox="0 0 24 24"
@@ -150,6 +165,46 @@ export default function NotificationDrawer({ isOpen, onClose, onUnreadChange }) 
     await loadNotifications();
   };
 
+  const resolveNotificationLink = async (notification) => {
+    if (!notification) {
+      return null;
+    }
+    const { taskId, milestoneId, projectId } = notification;
+    if (taskId) {
+      if (projectId && milestoneId) {
+        return `/projects/${projectId}/milestones/${milestoneId}?taskId=${taskId}&tab=overview`;
+      }
+      try {
+        const response = await fetch(`/api/tasks/${taskId}`);
+        const data = await response.json();
+        const taskMilestone = data?.task?.milestone;
+        if (response.ok && taskMilestone?.projectId && taskMilestone?.id) {
+          return `/projects/${taskMilestone.projectId}/milestones/${taskMilestone.id}?taskId=${taskId}&tab=overview`;
+        }
+      } catch (error) {
+        return null;
+      }
+    }
+    if (milestoneId) {
+      if (projectId) {
+        return `/projects/${projectId}/milestones/${milestoneId}`;
+      }
+      try {
+        const response = await fetch(`/api/milestones/${milestoneId}`);
+        const data = await response.json();
+        if (response.ok && data?.milestone?.projectId) {
+          return `/projects/${data.milestone.projectId}/milestones/${milestoneId}`;
+        }
+      } catch (error) {
+        return null;
+      }
+    }
+    if (projectId) {
+      return `/projects/${projectId}`;
+    }
+    return null;
+  };
+
   const handleNotificationClick = async (notification) => {
     if (!notification?.readAt) {
       await fetch(`/api/notifications/${notification.id}/read`, {
@@ -158,15 +213,10 @@ export default function NotificationDrawer({ isOpen, onClose, onUnreadChange }) 
       await loadNotifications();
     }
 
-    const link = notification.taskId
-      ? `/projects/${notification.projectId}/milestones/${notification.milestoneId}?taskId=${notification.taskId}&tab=overview`
-      : notification.milestoneId
-        ? `/projects/${notification.projectId}/milestones/${notification.milestoneId}`
-        : notification.projectId
-          ? `/projects/${notification.projectId}`
-          : null;
+    const link = await resolveNotificationLink(notification);
 
     if (link) {
+      window.dispatchEvent(new CustomEvent("pms:navigation-start"));
       router.push(link);
       onClose?.();
     }
