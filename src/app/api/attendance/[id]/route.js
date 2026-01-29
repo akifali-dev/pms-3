@@ -33,6 +33,24 @@ function parseDateTime(value) {
   return parsed;
 }
 
+function getEditWindow() {
+  const today = normalizeDateOnly(new Date());
+  if (!today) {
+    return null;
+  }
+  const earliest = new Date(today);
+  earliest.setUTCDate(today.getUTCDate() - 2);
+  return { earliest, today };
+}
+
+function isDateEditable(date) {
+  const window = getEditWindow();
+  if (!window || !date) {
+    return false;
+  }
+  return date >= window.earliest && date <= window.today;
+}
+
 function normalizeNote(note) {
   if (note === undefined) {
     return undefined;
@@ -89,6 +107,13 @@ export async function PATCH(request, { params }) {
 
   if (inTime && outTime && outTime < inTime) {
     return buildError("Out time cannot be before in time.", 400);
+  }
+
+  if (!leader && !isDateEditable(nextDate)) {
+    return buildError(
+      "You can only edit attendance for today and the last 2 days.",
+      403
+    );
   }
 
   let targetUserId = existing.userId;

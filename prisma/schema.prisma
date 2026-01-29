@@ -44,11 +44,25 @@ enum NotificationType {
   TASK_MOVEMENT
   CREATION_ASSIGNMENT
   USER_LOG_COMMENT
+  TIME_REQUEST
 }
 
 enum CommentEntityType {
   TASK
   MANUAL_LOG
+}
+
+enum TaskTimeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TaskBreakReason {
+  NAMAZ
+  MEAL
+  REFRESHMENT
+  OTHER
 }
 
 model User {
@@ -67,6 +81,9 @@ model User {
   statusChanges    TaskStatusHistory[] @relation("TaskStatusHistoryChangedBy")
   commentsWritten  Comment[]     @relation("CommentCreator")
   commentReadStates CommentReadState[]
+  taskTimeRequests TaskTimeRequest[] @relation("TaskTimeRequestCreator")
+  taskTimeReviews  TaskTimeRequest[] @relation("TaskTimeRequestReviewer")
+  taskBreaks       TaskBreak[]
   notificationsAuthored Notification[] @relation("NotificationActor")
   notificationRecipients NotificationRecipient[]
   attendances      Attendance[]
@@ -126,6 +143,8 @@ model Task {
   checklistItems ChecklistItem[]
   statusHistory  TaskStatusHistory[]
   timeLogs       TaskTimeLog[]
+  timeRequests   TaskTimeRequest[]
+  breaks         TaskBreak[]
   activityLogs   ActivityLog[]
   notifications  Notification[]
   createdAt      DateTime       @default(now())
@@ -140,6 +159,35 @@ model TaskTimeLog {
   startedAt DateTime
   endedAt   DateTime?
   createdAt DateTime   @default(now())
+}
+
+model TaskTimeRequest {
+  id               String                @id @default(auto()) @map("_id") @db.ObjectId
+  taskId           String                @db.ObjectId
+  task             Task                  @relation(fields: [taskId], references: [id])
+  requestedById    String                @db.ObjectId
+  requestedBy      User                  @relation("TaskTimeRequestCreator", fields: [requestedById], references: [id])
+  requestedSeconds Int
+  reason           String
+  status           TaskTimeRequestStatus @default(PENDING)
+  reviewedById     String?               @db.ObjectId
+  reviewedBy       User?                 @relation("TaskTimeRequestReviewer", fields: [reviewedById], references: [id])
+  reviewedAt       DateTime?
+  createdAt        DateTime              @default(now())
+}
+
+model TaskBreak {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  taskId          String          @db.ObjectId
+  task            Task            @relation(fields: [taskId], references: [id])
+  userId          String          @db.ObjectId
+  user            User            @relation(fields: [userId], references: [id])
+  reason          TaskBreakReason
+  note            String?
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationSeconds Int             @default(0)
+  createdAt       DateTime        @default(now())
 }
 
 model TaskStatusHistory {

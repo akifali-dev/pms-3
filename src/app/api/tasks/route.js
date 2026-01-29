@@ -10,7 +10,7 @@ import {
 } from "@/lib/api";
 import { TASK_STATUSES } from "@/lib/kanban";
 import { getChecklistForTaskType } from "@/lib/taskChecklists";
-import { calculateTotalTimeSpent } from "@/lib/timeLogs";
+import { resolveTotalTimeSpent } from "@/lib/timeLogs";
 import { createNotification, getProjectMemberIds } from "@/lib/notifications";
 
 export async function GET(request) {
@@ -78,12 +78,14 @@ export async function GET(request) {
       statusHistory: true,
       activityLogs: true,
       timeLogs: true,
+      breaks: { orderBy: { startedAt: "desc" } },
     },
   });
 
   const hydratedTasks = tasks.map((task) => ({
     ...task,
-    totalTimeSpent: calculateTotalTimeSpent(task.timeLogs),
+    totalTimeSpent: resolveTotalTimeSpent(task),
+    activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
   }));
 
   return buildSuccess("Tasks loaded.", { tasks: hydratedTasks });
@@ -186,6 +188,7 @@ export async function POST(request) {
         ownerId: resolvedOwnerId,
         estimatedHours,
         reworkCount: 0,
+        lastStartedAt: status === "IN_PROGRESS" ? new Date() : null,
       },
       include: {
         owner: { select: { id: true, name: true, email: true, role: true } },
@@ -196,6 +199,7 @@ export async function POST(request) {
         statusHistory: true,
         activityLogs: true,
         timeLogs: true,
+        breaks: { orderBy: { startedAt: "desc" } },
       },
     });
 
@@ -264,6 +268,7 @@ export async function POST(request) {
         statusHistory: true,
         activityLogs: true,
         timeLogs: true,
+        breaks: { orderBy: { startedAt: "desc" } },
       },
     });
   });
@@ -273,7 +278,8 @@ export async function POST(request) {
     {
       task: {
         ...task,
-        totalTimeSpent: calculateTotalTimeSpent(task.timeLogs),
+        totalTimeSpent: resolveTotalTimeSpent(task),
+        activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
       },
     },
     201
