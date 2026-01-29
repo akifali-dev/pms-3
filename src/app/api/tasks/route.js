@@ -7,6 +7,7 @@ import {
   ensureRole,
   getAuthContext,
   isAdminRole,
+  isManagementRole,
 } from "@/lib/api";
 import { TASK_STATUSES } from "@/lib/kanban";
 import { getChecklistForTaskType } from "@/lib/taskChecklists";
@@ -43,12 +44,14 @@ export async function GET(request) {
     return buildError("Milestone not found.", 404);
   }
 
-  if (
-    !milestone.project.members?.some(
-      (member) => member.userId === context.user.id
-    )
-  ) {
-    return buildError("You do not have permission to view these tasks.", 403);
+  if (!isManagementRole(context.role)) {
+    if (
+      !milestone.project.members?.some(
+        (member) => member.userId === context.user.id
+      )
+    ) {
+      return buildError("You do not have permission to view these tasks.", 403);
+    }
   }
 
   if (status) {
@@ -146,12 +149,14 @@ export async function POST(request) {
     return buildError("Milestone not found.", 404);
   }
 
-  if (
-    !milestone.project.members?.some(
-      (member) => member.userId === context.user.id
-    )
-  ) {
-    return buildError("You do not have permission to add tasks.", 403);
+  if (!isManagementRole(context.role)) {
+    if (
+      !milestone.project.members?.some(
+        (member) => member.userId === context.user.id
+      )
+    ) {
+      return buildError("You do not have permission to add tasks.", 403);
+    }
   }
 
   let resolvedOwnerId = ownerId;

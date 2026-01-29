@@ -1,12 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import {
-  ADMIN_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
-  ensureRole,
   getAuthContext,
-  isAdminRole,
+  isManagementRole,
 } from "@/lib/api";
 import { resolveTotalTimeSpent } from "@/lib/timeLogs";
 import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
@@ -38,16 +36,8 @@ function canAccessTask(context, task) {
     return false;
   }
 
-  if (
-    !task.milestone?.project?.members?.some(
-      (member) => member.userId === context.user.id
-    )
-  ) {
-    return false;
-  }
-
-  if (isAdminRole(context.role)) {
-    return task.ownerId === context.user.id;
+  if (isManagementRole(context.role)) {
+    return true;
   }
 
   return task.ownerId === context.user.id;
@@ -62,10 +52,8 @@ export async function PATCH(request, { params }) {
     return authError;
   }
 
-  const allowedRoles = [...ADMIN_ROLES, "DEVELOPER"];
-  const roleError = ensureRole(context.role, allowedRoles);
-  if (roleError) {
-    return roleError;
+  if (!isManagementRole(context.role)) {
+    return buildError("Only PM/CTO can edit tasks.", 403);
   }
 
   if (!taskId) {
@@ -116,9 +104,6 @@ export async function PATCH(request, { params }) {
   }
 
   if (body?.ownerId !== undefined) {
-    if (body.ownerId && body.ownerId !== context.user.id) {
-      return buildError("You can only assign tasks to yourself.", 403);
-    }
     updates.ownerId = body.ownerId;
   }
 

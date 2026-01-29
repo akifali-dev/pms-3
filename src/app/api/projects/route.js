@@ -6,6 +6,7 @@ import {
   ensureRole,
   getAuthContext,
   isAdminRole,
+  isManagementRole,
   PROJECT_MANAGEMENT_ROLES,
 } from "@/lib/api";
 import { createNotification } from "@/lib/notifications";
@@ -20,9 +21,11 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const createdById = searchParams.get("createdById");
 
-  const where = {
-    members: { some: { userId: context.user.id } },
-  };
+  const where = isManagementRole(context.role)
+    ? {}
+    : {
+        members: { some: { userId: context.user.id } },
+      };
   if (isAdminRole(context.role) && createdById) {
     where.createdById = createdById;
   }
