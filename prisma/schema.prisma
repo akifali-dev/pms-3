@@ -187,7 +187,6 @@ model Attendance {
   @@unique([userId, date])
   @@index([userId])
   @@index([date])
-  @@index([userId, date])
 }
 
 model Comment {
