@@ -43,6 +43,7 @@ enum ActivityCategory {
 enum NotificationType {
   TASK_MOVEMENT
   CREATION_ASSIGNMENT
+  TASK_ASSIGNED
   USER_LOG_COMMENT
   TIME_REQUEST
 }
