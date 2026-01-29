@@ -24,13 +24,13 @@ function canManageBreak(context, task) {
 }
 
 export async function POST(request, { params }) {
+  const {id:taskId} = await params;
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const taskId = params?.id;
   if (!taskId) {
     return buildError("Task id is required.", 400);
   }
