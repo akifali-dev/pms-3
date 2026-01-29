@@ -63,13 +63,14 @@ function normalizeNote(note) {
 }
 
 export async function PATCH(request, { params }) {
+  const {id:attendanceId} = await params;
+
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const attendanceId = params?.id;
   if (!attendanceId) {
     return buildError("Attendance id is required.", 400);
   }
