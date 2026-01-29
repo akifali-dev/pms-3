@@ -9,6 +9,7 @@ import AccessDeniedToast from "@/components/layout/AccessDeniedToast";
 import { useToast } from "@/components/ui/ToastProvider";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import NotificationDrawer from "@/components/notifications/NotificationDrawer";
+import RouteProgress from "@/components/layout/RouteProgress";
 
 const SIDEBAR_STATE_KEY = "pms.sidebar.collapsed";
 
@@ -20,6 +21,7 @@ export default function AppShell({ children, session }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const profileRef = useRef(null);
+  const baseTitleRef = useRef(null);
   const role = getRoleById(session?.role);
   const roleLabel = role?.label ?? "Guest";
   const userName = session?.name ?? "Guest";
@@ -36,6 +38,19 @@ export default function AppShell({ children, session }) {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SIDEBAR_STATE_KEY, String(isCollapsed));
   }, [isCollapsed]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!baseTitleRef.current) {
+      baseTitleRef.current = document.title;
+    }
+    const baseTitle = baseTitleRef.current ?? document.title;
+    if (unreadNotifications > 0) {
+      document.title = `(${unreadNotifications}) ${baseTitle}`;
+    } else {
+      document.title = baseTitle;
+    }
+  }, [unreadNotifications]);
 
   useOutsideClick(profileRef, () => setIsProfileOpen(false), isProfileOpen);
 
@@ -151,6 +166,7 @@ export default function AppShell({ children, session }) {
           </div>
         </div>
       </header>
+      <RouteProgress />
 
       <main className="fixed bottom-0 left-[var(--sidebar-width)] right-0 top-[var(--header-height)] overflow-y-auto px-6 py-6">
         <div className="mx-auto w-full max-w-6xl space-y-8">

@@ -65,7 +65,7 @@ export async function GET(request, { params }) {
     return authError;
   }
 
-  const commentId = params?.id;
+  const { id: commentId } = await params;
   if (!commentId) {
     return buildError("Comment id is required.", 400);
   }
@@ -89,7 +89,7 @@ export async function PATCH(request, { params }) {
     return authError;
   }
 
-  const commentId = params?.id;
+  const { id: commentId } = await params;
   if (!commentId) {
     return buildError("Comment id is required.", 400);
   }
@@ -128,7 +128,7 @@ export async function DELETE(request, { params }) {
     return authError;
   }
 
-  const commentId = params?.id;
+  const { id: commentId } = await params;
   if (!commentId) {
     return buildError("Comment id is required.", 400);
   }

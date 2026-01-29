@@ -37,7 +37,7 @@ export async function PATCH(request, { params }) {
     return buildError("Only PMs and CTOs can review time requests.", 403);
   }
 
-  const requestId = params?.requestId;
+  const { requestId } = await params;
   if (!requestId) {
     return buildError("Request id is required.", 400);
   }

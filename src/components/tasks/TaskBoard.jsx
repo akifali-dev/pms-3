@@ -78,6 +78,34 @@ const calculateBreakSeconds = (breaks, sessionStart) => {
   }, 0);
 };
 
+const getEffectiveSpentSeconds = (task, nowMs = Date.now()) => {
+  if (!task) {
+    return 0;
+  }
+  const baseSeconds = Number(task.totalTimeSpent ?? 0);
+  if (!task.lastStartedAt) {
+    return baseSeconds;
+  }
+  const sessionStart = new Date(task.lastStartedAt);
+  const sessionStartMs = sessionStart.getTime();
+  if (Number.isNaN(sessionStartMs)) {
+    return baseSeconds;
+  }
+  const breakSeconds = calculateBreakSeconds(task.breaks, sessionStart);
+  const pausedAt = task.activeBreak?.startedAt
+    ? new Date(task.activeBreak.startedAt).getTime()
+    : null;
+  const sessionEndMs = pausedAt ?? nowMs;
+  if (Number.isNaN(sessionEndMs)) {
+    return baseSeconds;
+  }
+  const sessionSeconds = Math.max(
+    0,
+    Math.floor((sessionEndMs - sessionStartMs) / 1000)
+  );
+  return baseSeconds + Math.max(0, sessionSeconds - breakSeconds);
+};
+
 const getProgressState = (task) => {
   if (task.status === "DONE") {
     return "completed";
@@ -135,6 +163,7 @@ export default function TaskBoard({
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [liveSpentSeconds, setLiveSpentSeconds] = useState(0);
+  const [timeNow, setTimeNow] = useState(Date.now());
   const [timeRequestOpen, setTimeRequestOpen] = useState(false);
   const [timeRequestForm, setTimeRequestForm] = useState({
     hours: "",
@@ -155,6 +184,18 @@ export default function TaskBoard({
   useEffect(() => {
     setTaskItems(tasks);
   }, [tasks]);
+
+  useEffect(() => {
+    const hasActiveSession = taskItems.some(
+      (task) => task.lastStartedAt && !task.activeBreak
+    );
+    if (!hasActiveSession) {
+      setTimeNow(Date.now());
+      return undefined;
+    }
+    const interval = setInterval(() => setTimeNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [taskItems]);
 
   useEffect(() => {
     const taskId = searchParams?.get("taskId");
@@ -845,11 +886,22 @@ export default function TaskBoard({
                   0,
                   (task.estimatedHours ?? 0) * 3600
                 );
+                const effectiveSpentSeconds = getEffectiveSpentSeconds(
+                  task,
+                  timeNow
+                );
+                const estimatedLabel =
+                  estimatedSeconds > 0
+                    ? formatEstimatedTime(task.estimatedHours)
+                    : "No estimate";
                 const progress =
                   estimatedSeconds > 0
-                    ? task.totalTimeSpent / estimatedSeconds
+                    ? effectiveSpentSeconds / estimatedSeconds
                     : 0;
-                const progressState = getProgressState(task);
+                const progressState = getProgressState({
+                  ...task,
+                  totalTimeSpent: effectiveSpentSeconds,
+                });
                 return (
                   <div
                     key={task.id}
@@ -893,10 +945,8 @@ export default function TaskBoard({
                           progress={progress}
                           state={progressState}
                         />
-                        <span>
-                          {formatEstimatedTime(task.estimatedHours)}
-                        </span>
-                        <span>{formatDurationShort(task.totalTimeSpent)}</span>
+                        <span>{estimatedLabel}</span>
+                        <span>{formatDurationShort(effectiveSpentSeconds)}</span>
                       </div>
                     </div>
                   </div>

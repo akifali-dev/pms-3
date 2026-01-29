@@ -262,6 +262,23 @@ export async function POST(request) {
       recipientIds: memberIds.length ? memberIds : [createdTask.ownerId],
     });
 
+    if (
+      ["PM", "CTO"].includes(context.role) &&
+      createdTask.ownerId &&
+      createdTask.ownerId !== context.user.id
+    ) {
+      await createNotification({
+        prismaClient: tx,
+        type: "TASK_ASSIGNED",
+        actorId: context.user.id,
+        message: `${context.user?.name || context.user?.email || "A leader"} assigned you task ${createdTask.title}.`,
+        taskId: createdTask.id,
+        projectId: createdTask.milestone?.projectId ?? null,
+        milestoneId: createdTask.milestone?.id ?? null,
+        recipientIds: [createdTask.ownerId],
+      });
+    }
+
     return tx.task.findUnique({
       where: { id: createdTask.id },
       include: {

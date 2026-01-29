@@ -72,7 +72,7 @@ export async function GET(request, { params }) {
     return authError;
   }
 
-  const taskId = params?.id;
+  const { id: taskId } = await params;
   if (!taskId) {
     return buildError("Task id is required.", 400);
   }
