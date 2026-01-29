@@ -51,6 +51,13 @@ export const routeAccess = {
     roles.SENIOR_DEV,
     roles.DEV,
   ],
+  "/attendance": [
+    roles.CEO,
+    roles.PM,
+    roles.CTO,
+    roles.SENIOR_DEV,
+    roles.DEV,
+  ],
   "/reports": [roles.CEO, roles.PM, roles.CTO],
   "/users": [roles.CEO, roles.PM, roles.CTO],
 };

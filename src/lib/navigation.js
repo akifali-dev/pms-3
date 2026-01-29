@@ -17,6 +17,7 @@ export const navigationItems = [
     href: "/activity",
     roles: [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV, roles.DEV],
   },
+  { label: "Attendance", href: "/attendance", roles: allRoles },
   {
     label: "Reports",
     href: "/reports",
