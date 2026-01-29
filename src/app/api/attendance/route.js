@@ -40,6 +40,24 @@ function normalizeDateRange(from, to) {
   return range;
 }
 
+function getEditWindow() {
+  const today = normalizeDateOnly(new Date());
+  if (!today) {
+    return null;
+  }
+  const earliest = new Date(today);
+  earliest.setUTCDate(today.getUTCDate() - 2);
+  return { earliest, today };
+}
+
+function isDateEditable(date) {
+  const window = getEditWindow();
+  if (!window || !date) {
+    return false;
+  }
+  return date >= window.earliest && date <= window.today;
+}
+
 function parseDateTime(value) {
   if (!value) {
     return null;
@@ -136,6 +154,13 @@ export async function POST(request) {
     if (!userExists) {
       return buildError("User not found.", 404);
     }
+  }
+
+  if (!leader && !isDateEditable(date)) {
+    return buildError(
+      "You can only edit attendance for today and the last 2 days.",
+      403
+    );
   }
 
   const attendance = await prisma.attendance.upsert({

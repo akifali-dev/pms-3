@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import ActionButton from "@/components/ui/ActionButton";
 import Drawer from "@/components/ui/Drawer";
 import CommentThread from "@/components/comments/CommentThread";
@@ -32,6 +33,49 @@ const formatEstimatedTime = (hoursValue = 0) => {
     return `${wholeHours}h`;
   }
   return minutes > 0 ? `${minutes}m` : "0m";
+};
+
+const formatBreakReason = (reason) => {
+  switch (reason) {
+    case "NAMAZ":
+      return "Namaz";
+    case "MEAL":
+      return "Meal";
+    case "REFRESHMENT":
+      return "Refreshment";
+    case "OTHER":
+      return "Other";
+    default:
+      return "Break";
+  }
+};
+
+const calculateBreakSeconds = (breaks, sessionStart) => {
+  if (!Array.isArray(breaks) || !sessionStart) {
+    return 0;
+  }
+  const startMs = new Date(sessionStart).getTime();
+  if (Number.isNaN(startMs)) {
+    return 0;
+  }
+  return breaks.reduce((total, brk) => {
+    if (!brk?.startedAt || !brk?.endedAt) {
+      return total;
+    }
+    const brkStart = new Date(brk.startedAt).getTime();
+    const brkEnd = new Date(brk.endedAt).getTime();
+    if (Number.isNaN(brkStart) || Number.isNaN(brkEnd)) {
+      return total;
+    }
+    if (brkStart < startMs) {
+      return total;
+    }
+    const durationSeconds =
+      Number(brk.durationSeconds ?? 0) > 0
+        ? Number(brk.durationSeconds)
+        : Math.max(0, Math.floor((brkEnd - brkStart) / 1000));
+    return total + durationSeconds;
+  }, 0);
 };
 
 const getProgressState = (task) => {
@@ -77,6 +121,7 @@ export default function TaskBoard({
   onEditTask,
 }) {
   const { addToast } = useToast();
+  const searchParams = useSearchParams();
   const [taskItems, setTaskItems] = useState(tasks);
   const [pendingTaskId, setPendingTaskId] = useState(null);
   const [pendingChecklistId, setPendingChecklistId] = useState(null);
@@ -88,10 +133,33 @@ export default function TaskBoard({
   const [ownerFilter, setOwnerFilter] = useState("ALL");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [liveSpentSeconds, setLiveSpentSeconds] = useState(0);
+  const [timeRequestOpen, setTimeRequestOpen] = useState(false);
+  const [timeRequestForm, setTimeRequestForm] = useState({
+    hours: "",
+    minutes: "",
+    reason: "",
+  });
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [breakForm, setBreakForm] = useState({
+    reason: "NAMAZ",
+    note: "",
+  });
+  const [breakPanelOpen, setBreakPanelOpen] = useState(false);
+  const [breakSubmitting, setBreakSubmitting] = useState(false);
 
   useEffect(() => {
     setTaskItems(tasks);
   }, [tasks]);
+
+  useEffect(() => {
+    const taskId = searchParams?.get("taskId");
+    if (!taskId) {
+      return;
+    }
+    setSelectedTaskId(taskId);
+  }, [searchParams]);
 
   const ownerOptions = useMemo(() => {
     const owners = new Map();
@@ -119,10 +187,63 @@ export default function TaskBoard({
   );
 
   useEffect(() => {
-    if (selectedTaskId && !selectedTask) {
+    if (selectedTask?.id) {
+      const tab = searchParams?.get("tab") || "overview";
+      setActiveTab(tab);
+      setTimeRequestOpen(false);
+      setBreakPanelOpen(false);
+    }
+  }, [selectedTask?.id, searchParams]);
+
+  useEffect(() => {
+    if (!selectedTask) {
+      setLiveSpentSeconds(0);
+      return;
+    }
+    const updateLive = () => {
+      const baseSeconds = Number(selectedTask.totalTimeSpent ?? 0);
+      const sessionStart = selectedTask.lastStartedAt
+        ? new Date(selectedTask.lastStartedAt)
+        : null;
+      if (!sessionStart) {
+        setLiveSpentSeconds(baseSeconds);
+        return;
+      }
+      const breakSeconds = calculateBreakSeconds(
+        selectedTask.breaks,
+        sessionStart
+      );
+      const pausedAt = selectedTask.activeBreak?.startedAt
+        ? new Date(selectedTask.activeBreak.startedAt).getTime()
+        : null;
+      const sessionEndMs = pausedAt ?? Date.now();
+      const sessionSeconds = Math.max(
+        0,
+        Math.floor((sessionEndMs - sessionStart.getTime()) / 1000)
+      );
+      setLiveSpentSeconds(
+        baseSeconds + Math.max(0, sessionSeconds - breakSeconds)
+      );
+    };
+    updateLive();
+    if (selectedTask.lastStartedAt && !selectedTask.activeBreak) {
+      const interval = setInterval(updateLive, 1000);
+      return () => clearInterval(interval);
+    }
+    return undefined;
+  }, [
+    selectedTask?.id,
+    selectedTask?.totalTimeSpent,
+    selectedTask?.lastStartedAt,
+    selectedTask?.activeBreak?.startedAt,
+    selectedTask?.breaks,
+  ]);
+
+  useEffect(() => {
+    if (selectedTaskId && !selectedTask && taskItems.length > 0) {
       setSelectedTaskId(null);
     }
-  }, [selectedTaskId, selectedTask]);
+  }, [selectedTaskId, selectedTask, taskItems.length]);
 
   const filteredTasks = useMemo(() => {
     return taskItems.filter((task) => {
@@ -201,6 +322,132 @@ export default function TaskBoard({
       variant: "success",
     });
     setPendingTaskId(null);
+  };
+
+  const updateTaskState = (taskId, updater) => {
+    setTaskItems((prev) =>
+      prev.map((item) => (item.id === taskId ? updater(item) : item))
+    );
+  };
+
+  const handleRequestTimeSubmit = async (task) => {
+    if (!task) {
+      return;
+    }
+    const hours = Number(timeRequestForm.hours || 0);
+    const minutes = Number(timeRequestForm.minutes || 0);
+    const totalSeconds = Math.max(0, Math.round(hours * 3600 + minutes * 60));
+    if (!totalSeconds) {
+      addToast({
+        title: "Time needed",
+        message: "Add hours or minutes to request more time.",
+        variant: "error",
+      });
+      return;
+    }
+    if (!timeRequestForm.reason.trim()) {
+      addToast({
+        title: "Reason required",
+        message: "Please share a reason for the extra time.",
+        variant: "error",
+      });
+      return;
+    }
+    setRequestSubmitting(true);
+    const response = await fetch(`/api/tasks/${task.id}/time-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requestedSeconds: totalSeconds,
+        reason: timeRequestForm.reason.trim(),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      addToast({
+        title: "Request failed",
+        message: data?.error ?? "Unable to request more time.",
+        variant: "error",
+      });
+      setRequestSubmitting(false);
+      return;
+    }
+    addToast({
+      title: "Request sent",
+      message: "PM/CTO have been notified.",
+      variant: "success",
+    });
+    setTimeRequestForm({ hours: "", minutes: "", reason: "" });
+    setTimeRequestOpen(false);
+    setRequestSubmitting(false);
+  };
+
+  const handlePause = async (task) => {
+    if (!task) {
+      return;
+    }
+    if (!breakForm.reason) {
+      addToast({
+        title: "Select a reason",
+        message: "Please select a break reason.",
+        variant: "error",
+      });
+      return;
+    }
+    setBreakSubmitting(true);
+    const response = await fetch(`/api/tasks/${task.id}/breaks/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: breakForm.reason,
+        note: breakForm.reason === "OTHER" ? breakForm.note?.trim() : null,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      addToast({
+        title: "Pause failed",
+        message: data?.error ?? "Unable to start break.",
+        variant: "error",
+      });
+      setBreakSubmitting(false);
+      return;
+    }
+    updateTaskState(task.id, (item) => ({
+      ...item,
+      breaks: [data.break, ...(item.breaks ?? [])],
+      activeBreak: data.break,
+    }));
+    setBreakPanelOpen(false);
+    setBreakSubmitting(false);
+  };
+
+  const handleResume = async (task) => {
+    if (!task) {
+      return;
+    }
+    setBreakSubmitting(true);
+    const response = await fetch(`/api/tasks/${task.id}/breaks/end`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      addToast({
+        title: "Resume failed",
+        message: data?.error ?? "Unable to resume task.",
+        variant: "error",
+      });
+      setBreakSubmitting(false);
+      return;
+    }
+    updateTaskState(task.id, (item) => ({
+      ...item,
+      breaks: (item.breaks ?? []).map((brk) =>
+        brk.id === data.break.id ? data.break : brk
+      ),
+      activeBreak: null,
+    }));
+    setBreakSubmitting(false);
   };
 
   const handleChecklistToggle = async (taskId, item, nextValue) => {
@@ -632,125 +879,314 @@ export default function TaskBoard({
       >
         {selectedTask ? (
           <div className="space-y-6">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-lg font-semibold text-[color:var(--color-text)]">
-                  {selectedTask.title}
-                </p>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${getTypeBadge(
-                      selectedTask.type
-                    )}`}
-                  >
-                    {selectedTask.type}
-                  </span>
-                  {canEditTask(selectedTask) && onEditTask ? (
-                    <ActionButton
-                      label="Edit task"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => onEditTask(selectedTask)}
-                    />
-                  ) : null}
-                </div>
-              </div>
-              <p className="text-sm text-[color:var(--color-text-muted)]">
-                {selectedTask.description}
-              </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: "overview", label: "Overview" },
+                { id: "checklist", label: "Checklist" },
+                { id: "comments", label: "Comments" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                    activeTab === tab.id
+                      ? "border-[color:var(--color-accent)] bg-[color:var(--color-muted-bg)] text-[color:var(--color-text)]"
+                      : "border-[color:var(--color-border)] text-[color:var(--color-text-subtle)] hover:border-[color:var(--color-accent)]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
-            <div className="space-y-4 text-sm text-[color:var(--color-text)]">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
-                  Assigned developer
-                </p>
-                <div className="mt-2 flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-muted-bg)] text-sm font-semibold text-[color:var(--color-text)]">
-                    {(selectedTask.owner?.name ?? "U").charAt(0).toUpperCase()}
-                  </span>
-                  <span className="text-sm text-[color:var(--color-text-muted)]">
-                    {selectedTask.owner?.name ?? "Unassigned"}
-                  </span>
+            {activeTab === "overview" ? (
+              <div className="space-y-4 text-sm text-[color:var(--color-text)]">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-lg font-semibold text-[color:var(--color-text)]">
+                      {selectedTask.title}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${getTypeBadge(
+                          selectedTask.type
+                        )}`}
+                      >
+                        {selectedTask.type}
+                      </span>
+                      {canEditTask(selectedTask) && onEditTask ? (
+                        <ActionButton
+                          label="Edit task"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => onEditTask(selectedTask)}
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                  <p className="text-sm text-[color:var(--color-text-muted)]">
+                    {selectedTask.description}
+                  </p>
                 </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
-                  Status
-                </p>
-                <span className="mt-2 inline-flex w-fit rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs text-[color:var(--color-text-muted)]">
-                  {getStatusLabel(selectedTask.status)}
-                </span>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
-                  Time tracking
-                </p>
-                <div className="mt-3 flex items-center gap-4">
-                  <ProgressRing
-                    progress={
-                      (selectedTask.estimatedHours ?? 0) > 0
-                        ? selectedTask.totalTimeSpent /
-                          ((selectedTask.estimatedHours ?? 0) * 3600)
-                        : 0
-                    }
-                    state={getProgressState(selectedTask)}
-                  />
-                  <div className="space-y-1 text-xs text-[color:var(--color-text-muted)]">
-                    <p>
-                      Estimated{" "}
-                      <span className="font-semibold text-[color:var(--color-text)]">
-                        {formatEstimatedTime(selectedTask.estimatedHours)}
-                      </span>
-                    </p>
-                    <p>
-                      Logged{" "}
-                      <span className="font-semibold text-[color:var(--color-text)]">
-                        {formatDurationShort(selectedTask.totalTimeSpent)}
-                      </span>
-                    </p>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                    Assigned developer
+                  </p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--color-muted-bg)] text-sm font-semibold text-[color:var(--color-text)]">
+                      {(selectedTask.owner?.name ?? "U").charAt(0).toUpperCase()}
+                    </span>
+                    <span className="text-sm text-[color:var(--color-text-muted)]">
+                      {selectedTask.owner?.name ?? "Unassigned"}
+                    </span>
                   </div>
                 </div>
-              </div>
 
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
-                  Time logs
-                </p>
-                {selectedTask.timeLogs?.length ? (
-                  <ul className="mt-3 space-y-2 text-xs text-[color:var(--color-text-muted)]">
-                    {selectedTask.timeLogs.map((log) => (
-                      <li
-                        key={log.id}
-                        className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] px-3 py-2"
-                      >
-                        <p className="text-[color:var(--color-text)]">
-                          {getStatusLabel(log.status)}
-                        </p>
-                        <p className="mt-1 text-[color:var(--color-text-subtle)]">
-                          {new Date(log.startedAt).toLocaleDateString()} ·{" "}
-                          {formatDurationShort(
-                            log.endedAt
-                              ? (new Date(log.endedAt).getTime() -
-                                  new Date(log.startedAt).getTime()) /
-                                  1000
-                              : (Date.now() -
-                                  new Date(log.startedAt).getTime()) /
-                                  1000
-                          )}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
-                    No time logs recorded yet.
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                    Status
                   </p>
-                )}
-              </div>
+                  <span className="mt-2 inline-flex w-fit rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs text-[color:var(--color-text-muted)]">
+                    {getStatusLabel(selectedTask.status)}
+                  </span>
+                </div>
 
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                    Time tracking
+                  </p>
+                  <div className="mt-3 flex items-center gap-4">
+                    <ProgressRing
+                      progress={
+                        (selectedTask.estimatedHours ?? 0) > 0
+                          ? liveSpentSeconds /
+                            ((selectedTask.estimatedHours ?? 0) * 3600)
+                          : 0
+                      }
+                      state={getProgressState({
+                        ...selectedTask,
+                        totalTimeSpent: liveSpentSeconds,
+                      })}
+                    />
+                    <div className="space-y-1 text-xs text-[color:var(--color-text-muted)]">
+                      <p>
+                        Estimated{" "}
+                        <span className="font-semibold text-[color:var(--color-text)]">
+                          {formatEstimatedTime(selectedTask.estimatedHours)}
+                        </span>
+                      </p>
+                      <p>
+                        Spent{" "}
+                        <span className="font-semibold text-[color:var(--color-text)]">
+                          {formatDurationShort(liveSpentSeconds)}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {canEditTask(selectedTask) ? (
+                      <ActionButton
+                        label="Request more time"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setTimeRequestOpen((prev) => !prev)}
+                      />
+                    ) : null}
+                    {["IN_PROGRESS", "DEV_TEST"].includes(selectedTask.status) &&
+                    canMoveTaskForTask(selectedTask) ? (
+                      <ActionButton
+                        label={selectedTask.activeBreak ? "Resume" : "Pause"}
+                        size="sm"
+                        variant={selectedTask.activeBreak ? "success" : "warning"}
+                        onClick={() =>
+                          selectedTask.activeBreak
+                            ? handleResume(selectedTask)
+                            : setBreakPanelOpen((prev) => !prev)
+                        }
+                        className={breakSubmitting ? "pointer-events-none opacity-60" : ""}
+                      />
+                    ) : null}
+                  </div>
+                  {selectedTask.activeBreak ? (
+                    <p className="mt-2 text-xs text-amber-400">
+                      Paused: {formatBreakReason(selectedTask.activeBreak.reason)} (
+                      {new Date(
+                        selectedTask.activeBreak.startedAt
+                      ).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                      )
+                    </p>
+                  ) : null}
+                </div>
+
+                {timeRequestOpen ? (
+                  <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4">
+                    <div className="flex flex-wrap gap-3">
+                      <label className="flex flex-1 flex-col gap-2 text-xs text-[color:var(--color-text-muted)]">
+                        Hours
+                        <input
+                          type="number"
+                          min="0"
+                          value={timeRequestForm.hours}
+                          onChange={(event) =>
+                            setTimeRequestForm((prev) => ({
+                              ...prev,
+                              hours: event.target.value,
+                            }))
+                          }
+                          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                        />
+                      </label>
+                      <label className="flex flex-1 flex-col gap-2 text-xs text-[color:var(--color-text-muted)]">
+                        Minutes
+                        <input
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={timeRequestForm.minutes}
+                          onChange={(event) =>
+                            setTimeRequestForm((prev) => ({
+                              ...prev,
+                              minutes: event.target.value,
+                            }))
+                          }
+                          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                        />
+                      </label>
+                    </div>
+                    <label className="mt-3 flex flex-col gap-2 text-xs text-[color:var(--color-text-muted)]">
+                      Reason
+                      <textarea
+                        value={timeRequestForm.reason}
+                        onChange={(event) =>
+                          setTimeRequestForm((prev) => ({
+                            ...prev,
+                            reason: event.target.value,
+                          }))
+                        }
+                        rows={3}
+                        className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                      />
+                    </label>
+                    <div className="mt-3 flex justify-end gap-2">
+                      <ActionButton
+                        label="Cancel"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setTimeRequestOpen(false)}
+                      />
+                      <ActionButton
+                        label={requestSubmitting ? "Sending..." : "Submit"}
+                        size="sm"
+                        variant="primary"
+                        onClick={() => handleRequestTimeSubmit(selectedTask)}
+                        className={
+                          requestSubmitting ? "pointer-events-none opacity-60" : ""
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                {breakPanelOpen ? (
+                  <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4">
+                    <label className="flex flex-col gap-2 text-xs text-[color:var(--color-text-muted)]">
+                      Break reason
+                      <select
+                        value={breakForm.reason}
+                        onChange={(event) =>
+                          setBreakForm((prev) => ({
+                            ...prev,
+                            reason: event.target.value,
+                          }))
+                        }
+                        className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                      >
+                        <option value="NAMAZ">Namaz</option>
+                        <option value="MEAL">Meal</option>
+                        <option value="REFRESHMENT">Refreshment</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </label>
+                    {breakForm.reason === "OTHER" ? (
+                      <label className="mt-3 flex flex-col gap-2 text-xs text-[color:var(--color-text-muted)]">
+                        Note (optional)
+                        <textarea
+                          value={breakForm.note}
+                          onChange={(event) =>
+                            setBreakForm((prev) => ({
+                              ...prev,
+                              note: event.target.value,
+                            }))
+                          }
+                          rows={2}
+                          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                        />
+                      </label>
+                    ) : null}
+                    <div className="mt-3 flex justify-end gap-2">
+                      <ActionButton
+                        label="Cancel"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setBreakPanelOpen(false)}
+                      />
+                      <ActionButton
+                        label={breakSubmitting ? "Pausing..." : "Pause"}
+                        size="sm"
+                        variant="warning"
+                        onClick={() => handlePause(selectedTask)}
+                        className={
+                          breakSubmitting ? "pointer-events-none opacity-60" : ""
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                    Time logs
+                  </p>
+                  {selectedTask.timeLogs?.length ? (
+                    <ul className="mt-3 space-y-2 text-xs text-[color:var(--color-text-muted)]">
+                      {selectedTask.timeLogs.map((log) => (
+                        <li
+                          key={log.id}
+                          className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] px-3 py-2"
+                        >
+                          <p className="text-[color:var(--color-text)]">
+                            {getStatusLabel(log.status)}
+                          </p>
+                          <p className="mt-1 text-[color:var(--color-text-subtle)]">
+                            {new Date(log.startedAt).toLocaleDateString()} ·{" "}
+                            {formatDurationShort(
+                              log.endedAt
+                                ? (new Date(log.endedAt).getTime() -
+                                    new Date(log.startedAt).getTime()) /
+                                    1000
+                                : (Date.now() -
+                                    new Date(log.startedAt).getTime()) /
+                                    1000
+                            )}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
+                      No time logs recorded yet.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === "checklist" ? (
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
                   Checklist
@@ -798,14 +1234,15 @@ export default function TaskBoard({
                     No checklist items assigned.
                   </p>
                 )}
-                {selectedTask.status === "TESTING" &&
-                  canMarkTaskDone(role) && (
+                {selectedTask.status === "TESTING" && canMarkTaskDone(role) && (
                   <p className="mt-3 text-xs text-sky-500">
                     PM review checklist for testing sign-off.
                   </p>
                 )}
               </div>
+            ) : null}
 
+            {activeTab === "comments" ? (
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
                   Comments
@@ -817,7 +1254,7 @@ export default function TaskBoard({
                   users={mentionUsers}
                 />
               </div>
-            </div>
+            ) : null}
 
             <div>{renderActions(selectedTask)}</div>
           </div>

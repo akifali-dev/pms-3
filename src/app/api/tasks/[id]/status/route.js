@@ -7,7 +7,11 @@ import {
   isAdminRole,
 } from "@/lib/api";
 import { getStatusLabel, isValidTransition } from "@/lib/kanban";
-import { calculateTotalTimeSpent } from "@/lib/timeLogs";
+import {
+  calculateTotalTimeSpent,
+  resolveTotalTimeSpent,
+  sumBreakSeconds,
+} from "@/lib/timeLogs";
 import {
   createNotification,
   getLeadershipUserIds,
@@ -29,6 +33,7 @@ async function getTask(taskId) {
       checklistItems: true,
       statusHistory: true,
       timeLogs: true,
+      breaks: { orderBy: { startedAt: "desc" } },
     },
   });
 }
@@ -164,13 +169,71 @@ export async function PATCH(request, { params }) {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    await tx.task.update({
-      where: { id: taskId },
-      data: updates,
-    });
+    const now = new Date();
+    const shouldCloseSession =
+      nextStatus === "TESTING" && task.lastStartedAt;
+
+    if (shouldCloseSession) {
+      const activeBreaks = await tx.taskBreak.findMany({
+        where: { taskId, endedAt: null },
+      });
+      if (activeBreaks.length > 0) {
+        await Promise.all(
+          activeBreaks.map((brk) =>
+            tx.taskBreak.update({
+              where: { id: brk.id },
+              data: {
+                endedAt: now,
+                durationSeconds: Math.max(
+                  0,
+                  Math.floor((now.getTime() - new Date(brk.startedAt).getTime()) / 1000)
+                ),
+              },
+            })
+          )
+        );
+      }
+
+      const breaksInSession = await tx.taskBreak.findMany({
+        where: {
+          taskId,
+          startedAt: { gte: task.lastStartedAt, lte: now },
+          endedAt: { not: null },
+        },
+      });
+      const breakSeconds = sumBreakSeconds(
+        breaksInSession,
+        task.lastStartedAt,
+        now
+      );
+      const sessionSeconds = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(task.lastStartedAt).getTime()) / 1000)
+      );
+      const netSeconds = Math.max(0, sessionSeconds - breakSeconds);
+      const existingTotal =
+        Number(task.totalTimeSpent ?? 0) > 0
+          ? Number(task.totalTimeSpent ?? 0)
+          : calculateTotalTimeSpent(
+              task.timeLogs?.filter((log) => log.endedAt) ?? [],
+              now
+            );
+
+      await tx.task.update({
+        where: { id: taskId },
+        data: {
+          ...updates,
+          totalTimeSpent: existingTotal + netSeconds,
+        },
+      });
+    } else {
+      await tx.task.update({
+        where: { id: taskId },
+        data: updates,
+      });
+    }
 
     const activeLog = getActiveTimeLog(task);
-    const now = new Date();
 
     if (nextStatus === "IN_PROGRESS" && !activeLog) {
       await tx.taskTimeLog.create({
@@ -235,16 +298,18 @@ export async function PATCH(request, { params }) {
         checklistItems: true,
         statusHistory: true,
         timeLogs: true,
+        breaks: { orderBy: { startedAt: "desc" } },
       },
     });
   });
 
-  const totalTimeSpent = calculateTotalTimeSpent(updated.timeLogs);
+  const totalTimeSpent = resolveTotalTimeSpent(updated);
 
   return buildSuccess("Task updated.", {
     task: {
       ...updated,
       totalTimeSpent,
+      activeBreak: updated.breaks?.find((brk) => !brk.endedAt) ?? null,
     },
   });
 }

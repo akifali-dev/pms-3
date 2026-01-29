@@ -8,7 +8,7 @@ import {
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
-import { calculateTotalTimeSpent } from "@/lib/timeLogs";
+import { resolveTotalTimeSpent } from "@/lib/timeLogs";
 import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
 
 async function getTask(taskId) {
@@ -28,6 +28,7 @@ async function getTask(taskId) {
       statusHistory: true,
       activityLogs: true,
       timeLogs: true,
+      breaks: { orderBy: { startedAt: "desc" } },
     },
   });
 }
@@ -189,6 +190,7 @@ export async function PATCH(request, { params }) {
         statusHistory: true,
         activityLogs: true,
         timeLogs: true,
+        breaks: { orderBy: { startedAt: "desc" } },
       },
     });
   });
@@ -196,7 +198,8 @@ export async function PATCH(request, { params }) {
   return buildSuccess("Task updated.", {
     task: {
       ...updatedTask,
-      totalTimeSpent: calculateTotalTimeSpent(updatedTask.timeLogs),
+      totalTimeSpent: resolveTotalTimeSpent(updatedTask),
+      activeBreak: updatedTask.breaks?.find((brk) => !brk.endedAt) ?? null,
     },
   });
 }

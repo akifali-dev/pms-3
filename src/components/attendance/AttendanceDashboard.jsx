@@ -78,6 +78,23 @@ function formatDuration(inTime, outTime) {
   return `${minutes}m`;
 }
 
+function isEditableAttendanceDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+  const today = new Date();
+  const startOfToday = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  );
+  const earliest = new Date(startOfToday);
+  earliest.setUTCDate(startOfToday.getUTCDate() - 2);
+  const target = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
+  return target >= earliest && target <= startOfToday;
+}
+
 function getPresetRange(preset) {
   const now = new Date();
   const start = new Date(now);
@@ -110,7 +127,7 @@ function combineDateTime(dateValue, timeValue) {
   return combined.toISOString();
 }
 
-const AttendanceMenu = ({ onEdit }) => {
+const AttendanceMenu = ({ onEdit, disabled, tooltip }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -122,13 +139,21 @@ const AttendanceMenu = ({ onEdit }) => {
         type="button"
         onClick={(event) => {
           event.stopPropagation();
+          if (disabled) {
+            return;
+          }
           setIsOpen((prev) => !prev);
         }}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)]"
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] transition ${
+          disabled
+            ? "cursor-not-allowed opacity-60"
+            : "hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)]"
+        }`}
         aria-label="Attendance actions"
-        title="Attendance actions"
+        title={disabled ? tooltip : "Attendance actions"}
         aria-expanded={isOpen}
         aria-haspopup="menu"
+        disabled={disabled}
       >
         <span className="text-lg leading-none">⋮</span>
       </button>
@@ -556,7 +581,11 @@ export default function AttendanceDashboard({
                     {record.note || "-"}
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <AttendanceMenu onEdit={() => openEditModal(record)} />
+                    <AttendanceMenu
+                      onEdit={() => openEditModal(record)}
+                      disabled={!isLeader && !isEditableAttendanceDate(record.date)}
+                      tooltip="You can only edit attendance for today and the last 2 days."
+                    />
                   </td>
                 </tr>
               ))}

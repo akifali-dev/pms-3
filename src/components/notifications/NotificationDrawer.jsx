@@ -57,6 +57,21 @@ const ICONS = {
       />
     </svg>
   ),
+  TIME_REQUEST: (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <path
+        d="M12 6v6l3 3M12 3a9 9 0 1 0 9 9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
 };
 
 function formatTimeAgo(value) {
@@ -144,7 +159,7 @@ export default function NotificationDrawer({ isOpen, onClose, onUnreadChange }) 
     }
 
     const link = notification.taskId
-      ? `/projects/${notification.projectId}/milestones/${notification.milestoneId}`
+      ? `/projects/${notification.projectId}/milestones/${notification.milestoneId}?taskId=${notification.taskId}&tab=overview`
       : notification.milestoneId
         ? `/projects/${notification.projectId}/milestones/${notification.milestoneId}`
         : notification.projectId
