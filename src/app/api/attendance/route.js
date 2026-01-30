@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { computeAttendanceDurationsForRecord } from "@/lib/dutyHours";
+import { normalizeAttendanceTimes } from "@/lib/attendanceTimes";
 import {
   PROJECT_MANAGEMENT_ROLES,
   buildError,
@@ -77,6 +79,22 @@ function normalizeNote(note) {
   return trimmed ? trimmed : null;
 }
 
+function attachComputedDurations(attendance) {
+  if (!attendance) {
+    return attendance;
+  }
+  const computed = computeAttendanceDurationsForRecord(attendance);
+  return {
+    ...attendance,
+    computedOfficeSeconds: computed.officeSeconds,
+    computedWfhSeconds: computed.wfhSeconds,
+    computedDutySeconds: computed.dutySeconds,
+    officeHHMM: computed.officeHHMM,
+    wfhHHMM: computed.wfhHHMM,
+    dutyHHMM: computed.dutyHHMM,
+  };
+}
+
 export async function GET(request) {
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
@@ -113,7 +131,9 @@ export async function GET(request) {
     },
   });
 
-  return buildSuccess("Attendance loaded.", { attendance });
+  return buildSuccess("Attendance loaded.", {
+    attendance: attendance.map((record) => attachComputedDurations(record)),
+  });
 }
 
 export async function POST(request) {
@@ -132,8 +152,13 @@ export async function POST(request) {
   const leader = isLeader(context.role);
   const targetUserId = leader && body?.userId ? body.userId : context.user.id;
 
-  const inTime = parseDateTime(body?.inTime);
-  const outTime = parseDateTime(body?.outTime);
+  const { inAt, outAt } = normalizeAttendanceTimes({
+    shiftDate: date,
+    inTime: body?.inTime,
+    outTime: body?.outTime,
+  });
+  const inTime = inAt ?? (body?.inTime ? parseDateTime(body?.inTime) : null);
+  const outTime = outAt ?? (body?.outTime ? parseDateTime(body?.outTime) : null);
 
   if (body?.inTime && !inTime) {
     return buildError("In time must be valid.", 400);
@@ -143,8 +168,12 @@ export async function POST(request) {
     return buildError("Out time must be valid.", 400);
   }
 
-  if (inTime && outTime && outTime < inTime) {
-    return buildError("Out time cannot be before in time.", 400);
+  if (!inTime || !outTime) {
+    return buildError("In time and out time are required.", 400);
+  }
+
+  if (inTime && outTime && outTime <= inTime) {
+    return buildError("Out time must be after in time.", 400);
   }
 
   if (leader && body?.userId) {
@@ -186,5 +215,7 @@ export async function POST(request) {
     },
   });
 
-  return buildSuccess("Attendance saved.", { attendance });
+  return buildSuccess("Attendance saved.", {
+    attendance: attachComputedDurations(attendance),
+  });
 }
