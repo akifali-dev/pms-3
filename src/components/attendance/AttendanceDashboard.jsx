@@ -53,68 +53,11 @@ function formatTimeInput(value) {
   return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
-function normalizeInterval(interval) {
-  if (!interval?.start || !interval?.end) {
-    return null;
-  }
-  const start = new Date(interval.start);
-  const end = new Date(interval.end);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return null;
-  }
-  if (end <= start) {
-    return null;
-  }
-  return { start, end };
-}
-
-function mergeIntervals(intervals) {
-  const normalized = (intervals ?? [])
-    .map((interval) => normalizeInterval(interval))
-    .filter(Boolean)
-    .sort((a, b) => a.start - b.start);
-
-  const merged = [];
-  normalized.forEach((interval) => {
-    const last = merged[merged.length - 1];
-    if (!last) {
-      merged.push({ ...interval });
-      return;
-    }
-    if (interval.start <= last.end) {
-      if (interval.end > last.end) {
-        last.end = interval.end;
-      }
-    } else {
-      merged.push({ ...interval });
-    }
-  });
-  return merged;
-}
-
-function formatDuration(inTime, outTime, wfhIntervals = []) {
-  const intervals = [];
-  if (inTime && outTime) {
-    intervals.push({ start: inTime, end: outTime });
-  }
-  if (Array.isArray(wfhIntervals)) {
-    wfhIntervals.forEach((interval) => {
-      if (interval?.startAt && interval?.endAt) {
-        intervals.push({ start: interval.startAt, end: interval.endAt });
-      }
-    });
-  }
-  const merged = mergeIntervals(intervals);
-  if (merged.length === 0) {
+function formatDurationFromSeconds(seconds) {
+  if (!seconds || seconds <= 0) {
     return "-";
   }
-  const totalMinutes = Math.round(
-    merged.reduce(
-      (total, interval) =>
-        total + (interval.end.getTime() - interval.start.getTime()) / 60000,
-      0
-    )
-  );
+  const totalMinutes = Math.round(seconds / 60);
   if (totalMinutes <= 0) {
     return "-";
   }
@@ -127,6 +70,46 @@ function formatDuration(inTime, outTime, wfhIntervals = []) {
     return `${hours}h`;
   }
   return `${minutes}m`;
+}
+
+function getRecordDurations(record) {
+  if (!record) {
+    return { office: "-", wfh: "-", total: "-" };
+  }
+  if (record.officeHHMM || record.wfhHHMM || record.dutyHHMM) {
+    return {
+      office: record.officeHHMM ?? "-",
+      wfh: record.wfhHHMM ?? "-",
+      total: record.dutyHHMM ?? "-",
+    };
+  }
+  let officeSeconds = 0;
+  if (record.inTime && record.outTime) {
+    const start = new Date(record.inTime);
+    const end = new Date(record.outTime);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
+      officeSeconds = Math.round((end - start) / 1000);
+    }
+  }
+  let wfhSeconds = 0;
+  if (Array.isArray(record.wfhIntervals)) {
+    record.wfhIntervals.forEach((interval) => {
+      if (!interval?.startAt || !interval?.endAt) {
+        return;
+      }
+      const start = new Date(interval.startAt);
+      const end = new Date(interval.endAt);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
+        wfhSeconds += Math.round((end - start) / 1000);
+      }
+    });
+  }
+  const totalSeconds = officeSeconds + wfhSeconds;
+  return {
+    office: formatDurationFromSeconds(officeSeconds),
+    wfh: formatDurationFromSeconds(wfhSeconds),
+    total: formatDurationFromSeconds(totalSeconds),
+  };
 }
 
 function isTodayDate(value) {
@@ -685,7 +668,9 @@ export default function AttendanceDashboard({
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">In time</th>
                 <th className="px-4 py-3">Out time</th>
-                <th className="px-4 py-3">Duty duration</th>
+                <th className="px-4 py-3">Office duration</th>
+                <th className="px-4 py-3">WFH duration</th>
+                <th className="px-4 py-3">Total duty</th>
                 <th className="px-4 py-3">Note</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -696,6 +681,10 @@ export default function AttendanceDashboard({
                   key={record.id}
                   className="border-b border-[color:var(--color-border)] last:border-b-0"
                 >
+                  {(() => {
+                    const durations = getRecordDurations(record);
+                    return (
+                      <>
                   {isLeader ? (
                     <td className="px-4 py-4">
                       <div className="text-sm font-semibold text-[color:var(--color-text)]">
@@ -716,11 +705,13 @@ export default function AttendanceDashboard({
                     {record.outTime ? formatDisplayTime(record.outTime) : "-"}
                   </td>
                   <td className="px-4 py-4 text-[color:var(--color-text)]">
-                    {formatDuration(
-                      record.inTime,
-                      record.outTime,
-                      record.wfhIntervals
-                    )}
+                    {durations.office}
+                  </td>
+                  <td className="px-4 py-4 text-[color:var(--color-text)]">
+                    {durations.wfh}
+                  </td>
+                  <td className="px-4 py-4 text-[color:var(--color-text)]">
+                    {durations.total}
                   </td>
                   <td className="px-4 py-4 text-[color:var(--color-text-muted)]">
                     {record.note || "-"}
@@ -732,6 +723,9 @@ export default function AttendanceDashboard({
                       tooltip="You can only edit attendance for today and the last 2 days."
                     />
                   </td>
+                      </>
+                    );
+                  })()}
                 </tr>
               ))}
             </tbody>
@@ -831,6 +825,7 @@ export default function AttendanceDashboard({
                   name="inTime"
                   value={form.inTime}
                   onChange={handleFormChange}
+                  required
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 />
               </label>
@@ -841,6 +836,7 @@ export default function AttendanceDashboard({
                   name="outTime"
                   value={form.outTime}
                   onChange={handleFormChange}
+                  required
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 />
               </label>

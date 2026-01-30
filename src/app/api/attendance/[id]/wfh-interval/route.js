@@ -6,7 +6,8 @@ import {
   getAuthContext,
   PROJECT_MANAGEMENT_ROLES,
 } from "@/lib/api";
-import { getDayBounds } from "@/lib/dutyHours";
+import { computeAttendanceDurationsForRecord } from "@/lib/dutyHours";
+import { normalizeWfhInterval } from "@/lib/attendanceTimes";
 
 function isLeader(role) {
   return PROJECT_MANAGEMENT_ROLES.includes(role);
@@ -25,15 +26,20 @@ function normalizeDateOnly(value) {
   );
 }
 
-function parseDateTime(value) {
-  if (!value) {
-    return null;
+function attachComputedDurations(attendance) {
+  if (!attendance) {
+    return attendance;
   }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return parsed;
+  const computed = computeAttendanceDurationsForRecord(attendance);
+  return {
+    ...attendance,
+    computedOfficeSeconds: computed.officeSeconds,
+    computedWfhSeconds: computed.wfhSeconds,
+    computedDutySeconds: computed.dutySeconds,
+    officeHHMM: computed.officeHHMM,
+    wfhHHMM: computed.wfhHHMM,
+    dutyHHMM: computed.dutyHHMM,
+  };
 }
 
 export async function POST(request, { params }) {
@@ -77,8 +83,11 @@ export async function POST(request, { params }) {
   }
 
   const body = await request.json();
-  const startAt = parseDateTime(body?.startAt);
-  const endAt = parseDateTime(body?.endAt);
+  const { startAt, endAt } = normalizeWfhInterval({
+    shiftDate: attendance.date,
+    startTime: body?.startAt ?? body?.startTime,
+    endTime: body?.endAt ?? body?.endTime,
+  });
 
   if (!startAt || !endAt) {
     return buildError("WFH start and end times are required.", 400);
@@ -88,9 +97,37 @@ export async function POST(request, { params }) {
     return buildError("WFH end time must be after start time.", 400);
   }
 
-  const bounds = getDayBounds(attendance.date);
-  if (!bounds || startAt < bounds.start || endAt > bounds.end) {
-    return buildError("WFH interval must be within the attendance date.", 400);
+  if (attendance.inTime && attendance.outTime) {
+    const officeStart = new Date(attendance.inTime);
+    const officeEnd = new Date(attendance.outTime);
+    if (
+      !Number.isNaN(officeStart.getTime()) &&
+      !Number.isNaN(officeEnd.getTime()) &&
+      startAt < officeEnd &&
+      endAt > officeStart
+    ) {
+      return buildError("WFH overlaps office time.", 400);
+    }
+  }
+
+  if (Array.isArray(attendance.wfhIntervals)) {
+    const overlap = attendance.wfhIntervals.some((interval) => {
+      if (!interval?.startAt || !interval?.endAt) {
+        return false;
+      }
+      const existingStart = new Date(interval.startAt);
+      const existingEnd = new Date(interval.endAt);
+      if (
+        Number.isNaN(existingStart.getTime()) ||
+        Number.isNaN(existingEnd.getTime())
+      ) {
+        return false;
+      }
+      return startAt < existingEnd && endAt > existingStart;
+    });
+    if (overlap) {
+      return buildError("WFH interval overlaps another interval.", 400);
+    }
   }
 
   const created = await prisma.attendanceWFHInterval.create({
@@ -110,7 +147,7 @@ export async function POST(request, { params }) {
   });
 
   return buildSuccess("WFH interval added.", {
-    attendance: updatedAttendance,
+    attendance: attachComputedDurations(updatedAttendance),
     interval: created,
   });
 }
