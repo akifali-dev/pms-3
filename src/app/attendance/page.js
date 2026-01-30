@@ -2,6 +2,7 @@ import AttendanceDashboard from "@/components/attendance/AttendanceDashboard";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { normalizeRole, PROJECT_MANAGEMENT_ROLES } from "@/lib/api";
+import { computeAttendanceDurationsForRecord } from "@/lib/dutyHours";
 
 function getWeekRange() {
   const now = new Date();
@@ -55,6 +56,18 @@ export default async function AttendancePage() {
           user: { select: { id: true, name: true, email: true, role: true } },
           wfhIntervals: { orderBy: { startAt: "asc" } },
         },
+      });
+      attendance = attendance.map((record) => {
+        const computed = computeAttendanceDurationsForRecord(record);
+        return {
+          ...record,
+          computedOfficeSeconds: computed.officeSeconds,
+          computedWfhSeconds: computed.wfhSeconds,
+          computedDutySeconds: computed.dutySeconds,
+          officeHHMM: computed.officeHHMM,
+          wfhHHMM: computed.wfhHHMM,
+          dutyHHMM: computed.dutyHHMM,
+        };
       });
     }
   }

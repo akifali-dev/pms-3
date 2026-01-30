@@ -22,6 +22,82 @@ export function getCutoffTime(date) {
   return cutoff;
 }
 
+export function formatDurationFromSeconds(seconds) {
+  if (!seconds || seconds <= 0) {
+    return "-";
+  }
+  const totalMinutes = Math.round(seconds / 60);
+  if (totalMinutes <= 0) {
+    return "-";
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours && minutes) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (hours) {
+    return `${hours}h`;
+  }
+  return `${minutes}m`;
+}
+
+export function computeAttendanceDurationsForRecord(attendance) {
+  if (!attendance) {
+    return {
+      officeSeconds: 0,
+      wfhSeconds: 0,
+      dutySeconds: 0,
+      officeHHMM: "-",
+      wfhHHMM: "-",
+      dutyHHMM: "-",
+    };
+  }
+  let officeSeconds = 0;
+  if (attendance.inTime && attendance.outTime) {
+    const start = new Date(attendance.inTime);
+    const end = new Date(attendance.outTime);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
+      officeSeconds = Math.round((end - start) / 1000);
+    }
+  }
+  let wfhSeconds = 0;
+  if (Array.isArray(attendance.wfhIntervals)) {
+    attendance.wfhIntervals.forEach((interval) => {
+      if (!interval?.startAt || !interval?.endAt) {
+        return;
+      }
+      const start = new Date(interval.startAt);
+      const end = new Date(interval.endAt);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
+        wfhSeconds += Math.round((end - start) / 1000);
+      }
+    });
+  }
+  const dutySeconds = officeSeconds + wfhSeconds;
+  return {
+    officeSeconds,
+    wfhSeconds,
+    dutySeconds,
+    officeHHMM: formatDurationFromSeconds(officeSeconds),
+    wfhHHMM: formatDurationFromSeconds(wfhSeconds),
+    dutyHHMM: formatDurationFromSeconds(dutySeconds),
+  };
+}
+
+export async function computeAttendanceDurations(prismaClient, attendanceId) {
+  if (!prismaClient || !attendanceId) {
+    return null;
+  }
+  const attendance = await prismaClient.attendance.findUnique({
+    where: { id: attendanceId },
+    include: { wfhIntervals: true },
+  });
+  if (!attendance) {
+    return null;
+  }
+  return computeAttendanceDurationsForRecord(attendance);
+}
+
 function isSameUtcDate(left, right) {
   if (!left || !right) {
     return false;

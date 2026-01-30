@@ -6,6 +6,8 @@ import {
   ensureAuthenticated,
   getAuthContext,
 } from "@/lib/api";
+import { computeAttendanceDurationsForRecord } from "@/lib/dutyHours";
+import { normalizeAttendanceTimes } from "@/lib/attendanceTimes";
 
 function isLeader(role) {
   return PROJECT_MANAGEMENT_ROLES.includes(role);
@@ -62,6 +64,22 @@ function normalizeNote(note) {
   return trimmed ? trimmed : null;
 }
 
+function attachComputedDurations(attendance) {
+  if (!attendance) {
+    return attendance;
+  }
+  const computed = computeAttendanceDurationsForRecord(attendance);
+  return {
+    ...attendance,
+    computedOfficeSeconds: computed.officeSeconds,
+    computedWfhSeconds: computed.wfhSeconds,
+    computedDutySeconds: computed.dutySeconds,
+    officeHHMM: computed.officeHHMM,
+    wfhHHMM: computed.wfhHHMM,
+    dutyHHMM: computed.dutyHHMM,
+  };
+}
+
 export async function PATCH(request, { params }) {
   const {id:attendanceId} = await params;
 
@@ -95,8 +113,17 @@ export async function PATCH(request, { params }) {
     return buildError("Date must be valid.", 400);
   }
 
-  const inTime = body?.inTime !== undefined ? parseDateTime(body.inTime) : existing.inTime;
-  const outTime = body?.outTime !== undefined ? parseDateTime(body.outTime) : existing.outTime;
+  const normalized = normalizeAttendanceTimes({
+    shiftDate: nextDate,
+    inTime: body?.inTime !== undefined ? body.inTime : existing.inTime,
+    outTime: body?.outTime !== undefined ? body.outTime : existing.outTime,
+  });
+  const inTime =
+    normalized.inAt ??
+    (body?.inTime !== undefined ? parseDateTime(body.inTime) : existing.inTime);
+  const outTime =
+    normalized.outAt ??
+    (body?.outTime !== undefined ? parseDateTime(body.outTime) : existing.outTime);
 
   if (body?.inTime !== undefined && body?.inTime && !inTime) {
     return buildError("In time must be valid.", 400);
@@ -106,8 +133,12 @@ export async function PATCH(request, { params }) {
     return buildError("Out time must be valid.", 400);
   }
 
-  if (inTime && outTime && outTime < inTime) {
-    return buildError("Out time cannot be before in time.", 400);
+  if (!inTime || !outTime) {
+    return buildError("In time and out time are required.", 400);
+  }
+
+  if (inTime && outTime && outTime <= inTime) {
+    return buildError("Out time must be after in time.", 400);
   }
 
   if (!leader && !isDateEditable(nextDate)) {
@@ -145,7 +176,9 @@ export async function PATCH(request, { params }) {
       },
     });
 
-    return buildSuccess("Attendance saved.", { attendance });
+    return buildSuccess("Attendance saved.", {
+      attendance: attachComputedDurations(attendance),
+    });
   } catch (error) {
     return buildError("Unable to update attendance.", 400);
   }
