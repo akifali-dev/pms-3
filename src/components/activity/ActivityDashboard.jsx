@@ -67,12 +67,24 @@ function getPeriodRange(period) {
   return { start, end };
 }
 
-function buildUserMap(users) {
-  const map = new Map();
-  users.forEach((user) => {
-    map.set(user.id, { user, entries: [] });
-  });
-  return map;
+const MANAGEMENT_ROLES = ["CEO", "PM", "CTO"];
+
+function normalizeRole(role) {
+  if (!role) {
+    return null;
+  }
+
+  return role
+    .toString()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_")
+    .toUpperCase();
+}
+
+function getAvatarLetter(user) {
+  const raw = user?.avatarLetter || user?.name || user?.email || "";
+  return raw.toString().trim().charAt(0).toUpperCase() || "?";
 }
 
 const ActivityMenu = ({ onLeaveComment }) => {
@@ -138,6 +150,7 @@ export default function ActivityDashboard({
   currentUser,
 }) {
   const { addToast } = useToast();
+  const isManager = MANAGEMENT_ROLES.includes(normalizeRole(currentUser?.role));
   const [period, setPeriod] = useState("daily");
   const [activeBadge, setActiveBadge] = useState("all");
   const [logs, setLogs] = useState(initialLogs);
@@ -181,12 +194,14 @@ export default function ActivityDashboard({
 
   const fetchLogs = async ({ targetUserId } = {}) => {
     setStatus({ loading: true, error: null });
+    setLogs([]);
     try {
       const { start, end } = getPeriodRange(period);
       const params = new URLSearchParams();
       params.set("startDate", start.toISOString());
       params.set("endDate", end.toISOString());
-      if (targetUserId) {
+      params.set("scope", isManager ? "all" : "mine");
+      if (targetUserId && isManager) {
         params.set("userId", targetUserId);
       }
       const response = await fetch(`/api/activity-logs?${params.toString()}`);
@@ -210,7 +225,7 @@ export default function ActivityDashboard({
 
   useEffect(() => {
     fetchLogs({ targetUserId: selectedUser?.id ?? "" });
-  }, [period, selectedUser?.id]);
+  }, [period, selectedUser?.id, isManager]);
 
   useEffect(() => {
     const manualLogIds = logs
@@ -265,33 +280,11 @@ export default function ActivityDashboard({
     return logs;
   }, [activeBadge, logs]);
 
-  const timeline = useMemo(() => {
-    const userMap = buildUserMap(users);
-
-    filteredLogs.forEach((log) => {
-      const bucket = userMap.get(log.user.id);
-      if (!bucket) {
-        return;
-      }
-      bucket.entries.push({
-        id: `log-${log.id}`,
-        type: "log",
-        timestamp: log.date,
-        description: log.description,
-        category: log.category,
-        hoursSpent: log.hoursSpent,
-        task: log.task,
-        log,
-      });
-    });
-
-    return Array.from(userMap.values()).map((entry) => ({
-      ...entry,
-      entries: entry.entries.sort(
-        (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
-      ),
-    }));
-  }, [filteredLogs, users]);
+  const sortedLogs = useMemo(() => {
+    return [...filteredLogs].sort(
+      (a, b) => new Date(b.date) - new Date(a.date)
+    );
+  }, [filteredLogs]);
 
   const handleLogChange = (event) => {
     const { name, value } = event.target;
@@ -433,62 +426,64 @@ export default function ActivityDashboard({
           </div>
         </div>
 
-        <div className="relative w-full max-w-xs" ref={userMenuRef}>
-          <input
-            value={userQuery}
-            onChange={(event) => {
-              setUserQuery(event.target.value);
-              setIsUserMenuOpen(true);
-              if (!event.target.value) {
-                setSelectedUser(null);
-              }
-            }}
-            onFocus={() => setIsUserMenuOpen(true)}
-            placeholder="Search user"
-            className="w-full rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-4 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
-          />
-          {selectedUser ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedUser(null);
-                setUserQuery("");
-                setIsUserMenuOpen(false);
+        {isManager ? (
+          <div className="relative w-full max-w-xs" ref={userMenuRef}>
+            <input
+              value={userQuery}
+              onChange={(event) => {
+                setUserQuery(event.target.value);
+                setIsUserMenuOpen(true);
+                if (!event.target.value) {
+                  setSelectedUser(null);
+                }
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--color-text-muted)]"
-              aria-label="Clear user filter"
-            >
-              ×
-            </button>
-          ) : null}
-          {isUserMenuOpen ? (
-            <div className="absolute right-0 z-10 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-xs shadow-xl">
-              {filteredUsers.length ? (
-                filteredUsers.map((user) => (
-                  <button
-                    key={user.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedUser(user);
-                      setUserQuery(user.name);
-                      setIsUserMenuOpen(false);
-                    }}
-                    className="flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
-                  >
-                    <span className="text-sm font-semibold">{user.name}</span>
-                    <span className="text-[11px] text-[color:var(--color-text-subtle)]">
-                      {user.role}
-                    </span>
-                  </button>
-                ))
-              ) : (
-                <p className="px-3 py-2 text-[color:var(--color-text-subtle)]">
-                  No users found.
-                </p>
-              )}
-            </div>
-          ) : null}
-        </div>
+              onFocus={() => setIsUserMenuOpen(true)}
+              placeholder="Search user"
+              className="w-full rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-4 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+            />
+            {selectedUser ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedUser(null);
+                  setUserQuery("");
+                  setIsUserMenuOpen(false);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--color-text-muted)]"
+                aria-label="Clear user filter"
+              >
+                ×
+              </button>
+            ) : null}
+            {isUserMenuOpen ? (
+              <div className="absolute right-0 z-10 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-xs shadow-xl">
+                {filteredUsers.length ? (
+                  filteredUsers.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setUserQuery(user.name);
+                        setIsUserMenuOpen(false);
+                      }}
+                      className="flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
+                    >
+                      <span className="text-sm font-semibold">{user.name}</span>
+                      <span className="text-[11px] text-[color:var(--color-text-subtle)]">
+                        {user.role}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2 text-[color:var(--color-text-subtle)]">
+                    No users found.
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {status.loading ? (
@@ -501,102 +496,96 @@ export default function ActivityDashboard({
         </div>
       ) : (
         <div className="space-y-4">
-          {timeline.map(({ user, entries }) => (
-            <div
-              key={user.id}
-              className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[color:var(--color-text)]">
-                    {user.name}
-                  </p>
-                  <p className="text-xs text-[color:var(--color-text-subtle)]">
-                    {user.email}
-                  </p>
-                </div>
-                <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
-                  {user.role}
-                </span>
-              </div>
-              {entries.length === 0 ? (
-                <p className="mt-4 text-xs text-[color:var(--color-text-subtle)]">
-                  No activity in this range.
-                </p>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {entries.map((entry) => {
-                    const isManualLog = entry.category !== "TASK";
-                    const badgeLabel = entry.category;
-                    const commentCount = isManualLog
-                      ? commentCounts[entry.log.id] ?? 0
-                      : 0;
-                    return (
-                      <div
-                        key={entry.id}
-                        className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-subtle)]">
-                          <span suppressHydrationWarning>
-                            {isHydrated ? formatDateTime(entry.timestamp) : ""}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            {commentCount > 0 ? (
-                              <button
-                                type="button"
-                                onClick={() => openEditLogModal(entry.log)}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:border-[color:var(--color-accent)]"
-                                aria-label="View comments"
-                              >
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  className="h-4 w-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.6"
-                                >
-                                  <path
-                                    d="M7 8h10M7 12h7M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-4 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  />
-                                </svg>
-                              </button>
-                            ) : null}
-                            <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
-                              {badgeLabel}
-                            </span>
-                            <ActivityMenu
-                              onLeaveComment={() => {
-                                if (entry.category === "TASK" && entry.task) {
-                                  setTaskDrawer({ open: true, task: entry.task });
-                                } else {
-                                  openEditLogModal(entry.log);
-                                }
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <p className="mt-2 text-sm text-[color:var(--color-text)]">
-                          {entry.description}
-                        </p>
-                        {entry.task ? (
-                          <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-                            Task: {entry.task.title}
-                          </p>
-                        ) : null}
-                        {entry.hoursSpent > 0 ? (
-                          <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-                            Hours: {entry.hoursSpent}
-                          </p>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+          {sortedLogs.length === 0 ? (
+            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 text-sm text-[color:var(--color-text-subtle)]">
+              No activity in this range.
             </div>
-          ))}
+          ) : (
+            sortedLogs.map((log) => {
+              const isManualLog = log.category !== "TASK";
+              const badgeLabel = log.category;
+              const commentCount = isManualLog
+                ? commentCounts[log.id] ?? 0
+                : 0;
+              const avatarLetter = getAvatarLetter(log.user);
+              return (
+                <div
+                  key={log.id}
+                  className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--color-muted-bg)] text-sm font-semibold text-[color:var(--color-text)]">
+                        {avatarLetter}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[color:var(--color-text)]">
+                          {log.user?.name ?? "Unknown user"}
+                        </p>
+                        <p className="text-xs text-[color:var(--color-text-subtle)]">
+                          {log.user?.role ?? ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {commentCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => openEditLogModal(log)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:border-[color:var(--color-accent)]"
+                          aria-label="View comments"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                          >
+                            <path
+                              d="M7 8h10M7 12h7M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-4 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                      ) : null}
+                      <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
+                        {badgeLabel}
+                      </span>
+                      <ActivityMenu
+                        onLeaveComment={() => {
+                          if (log.category === "TASK" && log.task) {
+                            setTaskDrawer({ open: true, task: log.task });
+                          } else {
+                            openEditLogModal(log);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-subtle)]">
+                    <span suppressHydrationWarning>
+                      {isHydrated ? formatDateTime(log.date) : ""}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-[color:var(--color-text)]">
+                    {log.description}
+                  </p>
+                  {log.task ? (
+                    <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                      Task: {log.task.title}
+                    </p>
+                  ) : null}
+                  {log.hoursSpent > 0 ? (
+                    <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                      Hours: {log.hoursSpent}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 

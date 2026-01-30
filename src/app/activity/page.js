@@ -1,13 +1,13 @@
 import ActivityDashboard from "@/components/activity/ActivityDashboard";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { isAdminRole, normalizeRole } from "@/lib/api";
+import { normalizeRole } from "@/lib/api";
 
 export default async function ActivityPage() {
   const session = await getSession();
   const hasDatabase = Boolean(process.env.DATABASE_URL);
   const role = normalizeRole(session?.role);
-  const isAdmin = isAdminRole(role);
+  const canViewAll = ["CEO", "PM", "CTO"].includes(role);
 
   let currentUser = null;
   let users = [];
@@ -20,18 +20,26 @@ export default async function ActivityPage() {
     });
 
     if (currentUser) {
-      const userFilter = isAdmin ? {} : { id: currentUser.id };
+      const userFilter = canViewAll ? {} : { id: currentUser.id };
       users = await prisma.user.findMany({
         where: userFilter,
         orderBy: { name: "asc" },
-        select: { id: true, name: true, email: true, role: true },
+        select: { id: true, name: true, email: true, role: true, avatarLetter: true },
       });
 
       activityLogs = await prisma.activityLog.findMany({
-        where: isAdmin ? {} : { userId: currentUser.id },
+        where: canViewAll ? {} : { userId: currentUser.id },
         orderBy: { date: "desc" },
         include: {
-          user: { select: { id: true, name: true, email: true, role: true } },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              avatarLetter: true,
+            },
+          },
           task: { select: { id: true, title: true, ownerId: true } },
         },
       });
