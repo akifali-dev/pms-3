@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Drawer from "@/components/ui/Drawer";
+import { useNotificationCounts } from "@/components/notifications/NotificationCountsContext";
 
 const TABS = [
   { id: "all", label: "All", query: null },
@@ -105,16 +106,11 @@ function formatTimeAgo(value) {
   return date.toLocaleDateString();
 }
 
-export default function NotificationDrawer({ isOpen, onClose, onUnreadChange }) {
+export default function NotificationDrawer({ isOpen, onClose }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("all");
   const [notifications, setNotifications] = useState([]);
-  const [counts, setCounts] = useState({
-    total: 0,
-    taskMovement: 0,
-    creation: 0,
-    log: 0,
-  });
+  const { counts, setCounts } = useNotificationCounts();
   const [isLoading, setIsLoading] = useState(false);
 
   const activeQuery = useMemo(
@@ -148,12 +144,6 @@ export default function NotificationDrawer({ isOpen, onClose, onUnreadChange }) 
     const interval = setInterval(loadNotifications, 30000);
     return () => clearInterval(interval);
   }, [activeQuery]);
-
-  useEffect(() => {
-    if (onUnreadChange) {
-      onUnreadChange(counts.total);
-    }
-  }, [counts.total, onUnreadChange]);
 
   const handleMarkAllRead = async () => {
     const response = await fetch("/api/notifications/mark-all-read", {
