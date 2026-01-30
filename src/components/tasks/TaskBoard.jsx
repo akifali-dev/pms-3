@@ -50,90 +50,15 @@ const formatBreakReason = (reason) => {
   }
 };
 
-const calculateBreakSeconds = (breaks, sessionStart) => {
-  if (!Array.isArray(breaks) || !sessionStart) {
-    return 0;
-  }
-  const startMs = new Date(sessionStart).getTime();
-  if (Number.isNaN(startMs)) {
-    return 0;
-  }
-  return breaks.reduce((total, brk) => {
-    if (!brk?.startedAt || !brk?.endedAt) {
-      return total;
-    }
-    const brkStart = new Date(brk.startedAt).getTime();
-    const brkEnd = new Date(brk.endedAt).getTime();
-    if (Number.isNaN(brkStart) || Number.isNaN(brkEnd)) {
-      return total;
-    }
-    if (brkStart < startMs) {
-      return total;
-    }
-    const durationSeconds =
-      Number(brk.durationSeconds ?? 0) > 0
-        ? Number(brk.durationSeconds)
-        : Math.max(0, Math.floor((brkEnd - brkStart) / 1000));
-    return total + durationSeconds;
-  }, 0);
-};
-
-const isWithinDutyWindow = (windows, nowMs) => {
-  if (!Array.isArray(windows) || windows.length === 0) {
-    return false;
-  }
-  const now = new Date(nowMs);
-  if (Number.isNaN(now.getTime())) {
-    return false;
-  }
-  return windows.some((window) => {
-    const start = new Date(window.start).getTime();
-    const end = new Date(window.end).getTime();
-    if (Number.isNaN(start) || Number.isNaN(end)) {
-      return false;
-    }
-    return now >= start && now <= end;
-  });
-};
-
-const getEffectiveSpentSeconds = (task, nowMs = Date.now(), dutyWindows = []) => {
-  if (!task) {
-    return 0;
-  }
-  const baseSeconds = Number(task.totalTimeSpent ?? 0);
-  if (!task.activeWorkSession?.startedAt) {
-    return baseSeconds;
-  }
-  const isOnDuty = isWithinDutyWindow(dutyWindows, nowMs);
-  if (!isOnDuty) {
-    return baseSeconds;
-  }
-  const sessionStart = new Date(task.activeWorkSession.startedAt);
-  const sessionStartMs = sessionStart.getTime();
-  if (Number.isNaN(sessionStartMs)) {
-    return baseSeconds;
-  }
-  const breakSeconds = calculateBreakSeconds(task.breaks, sessionStart);
-  const pausedAt = task.activeBreak?.startedAt
-    ? new Date(task.activeBreak.startedAt).getTime()
-    : null;
-  const sessionEndMs = pausedAt ?? nowMs;
-  if (Number.isNaN(sessionEndMs)) {
-    return baseSeconds;
-  }
-  const sessionSeconds = Math.max(
-    0,
-    Math.floor((sessionEndMs - sessionStartMs) / 1000)
-  );
-  return baseSeconds + Math.max(0, sessionSeconds - breakSeconds);
-};
-
 const getProgressState = (task) => {
   if (task.status === "DONE") {
     return "completed";
   }
   const estimatedSeconds = Math.max(0, (task.estimatedHours ?? 0) * 3600);
-  if (estimatedSeconds > 0 && task.totalTimeSpent > estimatedSeconds) {
+  const spentSeconds = Number(
+    task.spentTimeSeconds ?? task.totalTimeSpent ?? 0
+  );
+  if (estimatedSeconds > 0 && spentSeconds > estimatedSeconds) {
     return "overdue";
   }
   return "onTrack";
@@ -184,9 +109,6 @@ export default function TaskBoard({
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [liveSpentSeconds, setLiveSpentSeconds] = useState(0);
-  const [timeNow, setTimeNow] = useState(Date.now());
-  const [dutyWindows, setDutyWindows] = useState([]);
   const [timeRequestOpen, setTimeRequestOpen] = useState(false);
   const [timeRequestForm, setTimeRequestForm] = useState({
     hours: "",
@@ -207,50 +129,6 @@ export default function TaskBoard({
   useEffect(() => {
     setTaskItems(tasks);
   }, [tasks]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchDutyWindows = async () => {
-      try {
-        const dateParam = new Date().toLocaleDateString("en-CA");
-        const response = await fetch(
-          `/api/duty-windows?date=${encodeURIComponent(dateParam)}`
-        );
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data?.error ?? "Unable to load duty windows.");
-        }
-        if (isMounted) {
-          setDutyWindows(data?.windows ?? []);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setDutyWindows([]);
-        }
-      }
-    };
-
-    fetchDutyWindows();
-    const interval = setInterval(fetchDutyWindows, 5 * 60 * 1000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
-    const hasActiveSession = taskItems.some(
-      (task) => task.activeWorkSession?.startedAt && !task.activeBreak
-    );
-    const onDuty = isWithinDutyWindow(dutyWindows, Date.now());
-    if (!hasActiveSession || !onDuty) {
-      setTimeNow(Date.now());
-      return undefined;
-    }
-    const interval = setInterval(() => setTimeNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [taskItems, dutyWindows]);
 
   useEffect(() => {
     const taskId = searchParams?.get("taskId");
@@ -284,6 +162,7 @@ export default function TaskBoard({
     () => taskItems.find((task) => task.id === selectedTaskId) ?? null,
     [taskItems, selectedTaskId]
   );
+  const selectedSpentSeconds = Number(selectedTask?.spentTimeSeconds ?? 0);
 
   const isManager = [roles.PM, roles.CTO].includes(role);
 
@@ -342,56 +221,6 @@ export default function TaskBoard({
     isManager,
     currentUserId,
     loadTimeRequests,
-  ]);
-
-  useEffect(() => {
-    if (!selectedTask) {
-      setLiveSpentSeconds(0);
-      return;
-    }
-    const updateLive = () => {
-      const baseSeconds = Number(selectedTask.totalTimeSpent ?? 0);
-      const sessionStart = selectedTask.activeWorkSession?.startedAt
-        ? new Date(selectedTask.activeWorkSession.startedAt)
-        : null;
-      const onDuty = isWithinDutyWindow(dutyWindows, Date.now());
-      if (!sessionStart || !onDuty) {
-        setLiveSpentSeconds(baseSeconds);
-        return;
-      }
-      const breakSeconds = calculateBreakSeconds(
-        selectedTask.breaks,
-        sessionStart
-      );
-      const pausedAt = selectedTask.activeBreak?.startedAt
-        ? new Date(selectedTask.activeBreak.startedAt).getTime()
-        : null;
-      const sessionEndMs = pausedAt ?? Date.now();
-      const sessionSeconds = Math.max(
-        0,
-        Math.floor((sessionEndMs - sessionStart.getTime()) / 1000)
-      );
-      setLiveSpentSeconds(
-        baseSeconds + Math.max(0, sessionSeconds - breakSeconds)
-      );
-    };
-    updateLive();
-    if (selectedTask.activeWorkSession?.startedAt && !selectedTask.activeBreak) {
-      const onDuty = isWithinDutyWindow(dutyWindows, Date.now());
-      if (!onDuty) {
-        return undefined;
-      }
-      const interval = setInterval(updateLive, 1000);
-      return () => clearInterval(interval);
-    }
-    return undefined;
-  }, [
-    selectedTask?.id,
-    selectedTask?.totalTimeSpent,
-    selectedTask?.activeWorkSession?.startedAt,
-    selectedTask?.activeBreak?.startedAt,
-    selectedTask?.breaks,
-    dutyWindows,
   ]);
 
   useEffect(() => {
@@ -470,6 +299,14 @@ export default function TaskBoard({
     setTaskItems((prev) =>
       prev.map((item) => (item.id === task.id ? data.task : item))
     );
+
+    if (data?.warning) {
+      addToast({
+        title: "Off duty",
+        message: data.warning,
+        variant: "warning",
+      });
+    }
 
     addToast({
       title: "Task moved",
@@ -947,10 +784,8 @@ export default function TaskBoard({
                   0,
                   (task.estimatedHours ?? 0) * 3600
                 );
-                const effectiveSpentSeconds = getEffectiveSpentSeconds(
-                  task,
-                  timeNow,
-                  dutyWindows
+                const effectiveSpentSeconds = Number(
+                  task.spentTimeSeconds ?? 0
                 );
                 const estimatedLabel =
                   estimatedSeconds > 0
@@ -960,10 +795,7 @@ export default function TaskBoard({
                   estimatedSeconds > 0
                     ? effectiveSpentSeconds / estimatedSeconds
                     : 0;
-                const progressState = getProgressState({
-                  ...task,
-                  totalTimeSpent: effectiveSpentSeconds,
-                });
+                const progressState = getProgressState(task);
                 return (
                   <div
                     key={task.id}
@@ -1009,6 +841,13 @@ export default function TaskBoard({
                         />
                         <span>{estimatedLabel}</span>
                         <span>{formatDurationShort(effectiveSpentSeconds)}</span>
+                        <span>
+                          {task.isWFHNow
+                            ? "WFH"
+                            : task.isOnDutyNow
+                              ? "In office"
+                              : "Off duty"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1177,14 +1016,11 @@ export default function TaskBoard({
                     <ProgressRing
                       progress={
                         (selectedTask.estimatedHours ?? 0) > 0
-                          ? liveSpentSeconds /
+                          ? selectedSpentSeconds /
                             ((selectedTask.estimatedHours ?? 0) * 3600)
                           : 0
                       }
-                      state={getProgressState({
-                        ...selectedTask,
-                        totalTimeSpent: liveSpentSeconds,
-                      })}
+                      state={getProgressState(selectedTask)}
                     />
                     <div className="space-y-1 text-xs text-[color:var(--color-text-muted)]">
                       <p>
@@ -1196,9 +1032,24 @@ export default function TaskBoard({
                       <p>
                         Spent{" "}
                         <span className="font-semibold text-[color:var(--color-text)]">
-                          {formatDurationShort(liveSpentSeconds)}
+                          {formatDurationShort(selectedSpentSeconds)}
                         </span>
                       </p>
+                      <p>
+                        Status{" "}
+                        <span className="font-semibold text-[color:var(--color-text)]">
+                          {selectedTask.isWFHNow
+                            ? "WFH"
+                            : selectedTask.isOnDutyNow
+                              ? "In office"
+                              : "Off duty"}
+                        </span>
+                      </p>
+                      {selectedTask.isOffDutyNow ? (
+                        <p className="text-[11px] text-[color:var(--color-text-subtle)]">
+                          Off duty – no time counted.
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">

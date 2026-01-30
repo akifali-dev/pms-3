@@ -53,20 +53,71 @@ function formatTimeInput(value) {
   return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatDuration(inTime, outTime) {
-  if (!inTime || !outTime) {
-    return "-";
+function normalizeInterval(interval) {
+  if (!interval?.start || !interval?.end) {
+    return null;
   }
-  const start = new Date(inTime);
-  const end = new Date(outTime);
+  const start = new Date(interval.start);
+  const end = new Date(interval.end);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return null;
+  }
+  if (end <= start) {
+    return null;
+  }
+  return { start, end };
+}
+
+function mergeIntervals(intervals) {
+  const normalized = (intervals ?? [])
+    .map((interval) => normalizeInterval(interval))
+    .filter(Boolean)
+    .sort((a, b) => a.start - b.start);
+
+  const merged = [];
+  normalized.forEach((interval) => {
+    const last = merged[merged.length - 1];
+    if (!last) {
+      merged.push({ ...interval });
+      return;
+    }
+    if (interval.start <= last.end) {
+      if (interval.end > last.end) {
+        last.end = interval.end;
+      }
+    } else {
+      merged.push({ ...interval });
+    }
+  });
+  return merged;
+}
+
+function formatDuration(inTime, outTime, wfhIntervals = []) {
+  const intervals = [];
+  if (inTime && outTime) {
+    intervals.push({ start: inTime, end: outTime });
+  }
+  if (Array.isArray(wfhIntervals)) {
+    wfhIntervals.forEach((interval) => {
+      if (interval?.startAt && interval?.endAt) {
+        intervals.push({ start: interval.startAt, end: interval.endAt });
+      }
+    });
+  }
+  const merged = mergeIntervals(intervals);
+  if (merged.length === 0) {
     return "-";
   }
-  const diffMs = end - start;
-  if (diffMs < 0) {
+  const totalMinutes = Math.round(
+    merged.reduce(
+      (total, interval) =>
+        total + (interval.end.getTime() - interval.start.getTime()) / 60000,
+      0
+    )
+  );
+  if (totalMinutes <= 0) {
     return "-";
   }
-  const totalMinutes = Math.round(diffMs / 60000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   if (hours && minutes) {
@@ -76,6 +127,19 @@ function formatDuration(inTime, outTime) {
     return `${hours}h`;
   }
   return `${minutes}m`;
+}
+
+function isTodayDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+  const today = new Date();
+  return (
+    date.getUTCFullYear() === today.getUTCFullYear() &&
+    date.getUTCMonth() === today.getUTCMonth() &&
+    date.getUTCDate() === today.getUTCDate()
+  );
 }
 
 function isEditableAttendanceDate(value) {
@@ -211,6 +275,9 @@ export default function AttendanceDashboard({
     note: "",
     userId: currentUser?.id ?? "",
   });
+  const [wfhIntervals, setWfhIntervals] = useState([]);
+  const [wfhForm, setWfhForm] = useState({ startTime: "", endTime: "" });
+  const [wfhSubmitting, setWfhSubmitting] = useState(false);
   const [formUserQuery, setFormUserQuery] = useState("");
   const [isFormUserMenuOpen, setIsFormUserMenuOpen] = useState(false);
   const formUserMenuRef = useRef(null);
@@ -319,6 +386,8 @@ export default function AttendanceDashboard({
       note: "",
       userId: defaultUser?.id ?? currentUser?.id ?? "",
     });
+    setWfhIntervals([]);
+    setWfhForm({ startTime: "", endTime: "" });
     setFormUserQuery(defaultUser?.name ?? "");
     setActiveRecord(null);
     setModalState({ open: true, mode: "create" });
@@ -333,6 +402,8 @@ export default function AttendanceDashboard({
       note: record.note ?? "",
       userId: record.userId ?? record.user?.id ?? "",
     });
+    setWfhIntervals(record.wfhIntervals ?? []);
+    setWfhForm({ startTime: "", endTime: "" });
     setFormUserQuery(record.user?.name ?? "");
     setModalState({ open: true, mode: "edit" });
   };
@@ -344,6 +415,76 @@ export default function AttendanceDashboard({
   const handleFormChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const canAddWfh =
+    modalState.mode === "edit" &&
+    activeRecord &&
+    isTodayDate(activeRecord.date) &&
+    activeRecord.inTime &&
+    activeRecord.outTime;
+
+  const handleWfhChange = (event) => {
+    const { name, value } = event.target;
+    setWfhForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddWfhInterval = async () => {
+    if (!activeRecord?.id) {
+      return;
+    }
+    const startAt = combineDateTime(form.date, wfhForm.startTime);
+    const endAt = combineDateTime(form.date, wfhForm.endTime);
+    if (!startAt || !endAt) {
+      addToast({
+        title: "WFH time required",
+        message: "Select both a start and end time for WFH.",
+        variant: "warning",
+      });
+      return;
+    }
+    setWfhSubmitting(true);
+    try {
+      const response = await fetch(
+        `/api/attendance/${activeRecord.id}/wfh-interval`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ startAt, endAt }),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Unable to add WFH interval.");
+      }
+      addToast({
+        title: "WFH interval added",
+        message: data?.message ?? "WFH interval saved.",
+        variant: "success",
+      });
+      setWfhForm({ startTime: "", endTime: "" });
+      if (data?.attendance) {
+        setActiveRecord(data.attendance);
+        setWfhIntervals(data.attendance.wfhIntervals ?? []);
+        setAttendance((prev) =>
+          prev.map((record) =>
+            record.id === data.attendance.id ? data.attendance : record
+          )
+        );
+      } else {
+        fetchAttendance({ targetUserId: selectedUser?.id ?? "" });
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to add WFH interval.";
+      addToast({
+        title: "WFH failed",
+        message,
+        variant: "error",
+      });
+    } finally {
+      setWfhSubmitting(false);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -544,7 +685,7 @@ export default function AttendanceDashboard({
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">In time</th>
                 <th className="px-4 py-3">Out time</th>
-                <th className="px-4 py-3">Duration</th>
+                <th className="px-4 py-3">Duty duration</th>
                 <th className="px-4 py-3">Note</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -575,7 +716,11 @@ export default function AttendanceDashboard({
                     {record.outTime ? formatDisplayTime(record.outTime) : "-"}
                   </td>
                   <td className="px-4 py-4 text-[color:var(--color-text)]">
-                    {formatDuration(record.inTime, record.outTime)}
+                    {formatDuration(
+                      record.inTime,
+                      record.outTime,
+                      record.wfhIntervals
+                    )}
                   </td>
                   <td className="px-4 py-4 text-[color:var(--color-text-muted)]">
                     {record.note || "-"}
@@ -711,6 +856,69 @@ export default function AttendanceDashboard({
                 className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
               />
             </label>
+            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                  Work From Home
+                </p>
+                <span className="text-[11px] text-[color:var(--color-text-subtle)]">
+                  {canAddWfh
+                    ? "Add intervals for today"
+                    : "Available after in/out time for today"}
+                </span>
+              </div>
+              {wfhIntervals.length ? (
+                <ul className="mt-3 space-y-2 text-xs text-[color:var(--color-text-muted)]">
+                  {wfhIntervals.map((interval) => (
+                    <li
+                      key={interval.id}
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-3 py-2"
+                    >
+                      {formatDisplayTime(interval.startAt)} →{" "}
+                      {formatDisplayTime(interval.endAt)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-xs text-[color:var(--color-text-subtle)]">
+                  No WFH intervals recorded.
+                </p>
+              )}
+              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                  Start time
+                  <input
+                    type="time"
+                    name="startTime"
+                    value={wfhForm.startTime}
+                    onChange={handleWfhChange}
+                    disabled={!canAddWfh}
+                    className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </label>
+                <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                  End time
+                  <input
+                    type="time"
+                    name="endTime"
+                    value={wfhForm.endTime}
+                    onChange={handleWfhChange}
+                    disabled={!canAddWfh}
+                    className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </label>
+                <div className="flex items-end">
+                  <ActionButton
+                    label={wfhSubmitting ? "Adding..." : "Add interval"}
+                    variant="secondary"
+                    type="button"
+                    onClick={handleAddWfhInterval}
+                    disabled={!canAddWfh || wfhSubmitting}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
           <div className="sticky bottom-0 mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-card)] pt-4">
             <ActionButton

@@ -6,8 +6,7 @@ import {
   getAuthContext,
   isManagementRole,
 } from "@/lib/api";
-import { resolveTotalTimeSpent } from "@/lib/timeLogs";
-import { endSessionsPastCutoff } from "@/lib/taskWorkSessions";
+import { computeTaskSpentTime } from "@/lib/taskTimeCalculator";
 import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
 import { createNotification } from "@/lib/notifications";
 
@@ -59,8 +58,6 @@ export async function GET(request, { params }) {
     return buildError("Task id is required.", 400);
   }
 
-  await endSessionsPastCutoff(prisma, context.user.id, new Date());
-
   const task = await getTask(taskId);
   if (!task) {
     return buildError("Task not found.", 404);
@@ -70,13 +67,20 @@ export async function GET(request, { params }) {
     return buildError("You do not have permission to view this task.", 403);
   }
 
+  const computed = await computeTaskSpentTime(prisma, task.id, task.ownerId);
+
   return buildSuccess("Task loaded.", {
     task: {
       ...task,
-      totalTimeSpent: resolveTotalTimeSpent(task),
+      spentTimeSeconds: computed.effectiveSpentSeconds,
+      breakSeconds: computed.breakSeconds,
+      dutyOverlapSeconds: computed.dutyOverlapSeconds,
+      rawWorkSeconds: computed.rawWorkSeconds,
+      lastComputedAt: computed.lastComputedAt,
+      isOnDutyNow: computed.isOnDutyNow,
+      isWFHNow: computed.isWFHNow,
+      isOffDutyNow: computed.isOffDutyNow,
       activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
-      activeWorkSession:
-        task.workSessions?.find((session) => !session.endedAt) ?? null,
     },
   });
 }
@@ -236,13 +240,24 @@ export async function PATCH(request, { params }) {
     return nextTask;
   });
 
+  const computed = await computeTaskSpentTime(
+    prisma,
+    updatedTask.id,
+    updatedTask.ownerId
+  );
+
   return buildSuccess("Task updated.", {
     task: {
       ...updatedTask,
-      totalTimeSpent: resolveTotalTimeSpent(updatedTask),
+      spentTimeSeconds: computed.effectiveSpentSeconds,
+      breakSeconds: computed.breakSeconds,
+      dutyOverlapSeconds: computed.dutyOverlapSeconds,
+      rawWorkSeconds: computed.rawWorkSeconds,
+      lastComputedAt: computed.lastComputedAt,
+      isOnDutyNow: computed.isOnDutyNow,
+      isWFHNow: computed.isWFHNow,
+      isOffDutyNow: computed.isOffDutyNow,
       activeBreak: updatedTask.breaks?.find((brk) => !brk.endedAt) ?? null,
-      activeWorkSession:
-        updatedTask.workSessions?.find((session) => !session.endedAt) ?? null,
     },
   });
 }

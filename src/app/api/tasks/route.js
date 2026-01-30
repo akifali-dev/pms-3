@@ -11,8 +11,7 @@ import {
 } from "@/lib/api";
 import { TASK_STATUSES } from "@/lib/kanban";
 import { getChecklistForTaskType } from "@/lib/taskChecklists";
-import { resolveTotalTimeSpent } from "@/lib/timeLogs";
-import { endSessionsPastCutoff, getOnDutyStatus } from "@/lib/taskWorkSessions";
+import { computeTaskSpentTime } from "@/lib/taskTimeCalculator";
 import { createNotification, getProjectMemberIds } from "@/lib/notifications";
 
 export async function GET(request) {
@@ -32,8 +31,6 @@ export async function GET(request) {
   if (!milestoneId) {
     return buildError("Milestone id is required.", 400);
   }
-
-  await endSessionsPastCutoff(prisma, context.user.id, new Date());
 
   const milestone = await prisma.milestone.findUnique({
     where: { id: milestoneId },
@@ -89,13 +86,27 @@ export async function GET(request) {
     },
   });
 
-  const hydratedTasks = tasks.map((task) => ({
-    ...task,
-    totalTimeSpent: resolveTotalTimeSpent(task),
-    activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
-    activeWorkSession:
-      task.workSessions?.find((session) => !session.endedAt) ?? null,
-  }));
+  const hydratedTasks = await Promise.all(
+    tasks.map(async (task) => {
+      const computed = await computeTaskSpentTime(
+        prisma,
+        task.id,
+        task.ownerId
+      );
+      return {
+        ...task,
+        spentTimeSeconds: computed.effectiveSpentSeconds,
+        breakSeconds: computed.breakSeconds,
+        dutyOverlapSeconds: computed.dutyOverlapSeconds,
+        rawWorkSeconds: computed.rawWorkSeconds,
+        lastComputedAt: computed.lastComputedAt,
+        isOnDutyNow: computed.isOnDutyNow,
+        isWFHNow: computed.isWFHNow,
+        isOffDutyNow: computed.isOffDutyNow,
+        activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
+      };
+    })
+  );
 
   return buildSuccess("Tasks loaded.", { tasks: hydratedTasks });
 }
@@ -245,24 +256,6 @@ export async function POST(request) {
       });
     }
 
-    if (["IN_PROGRESS", "DEV_TEST"].includes(status)) {
-      const dutyStatus = await getOnDutyStatus(tx, createdTask.ownerId, now);
-      if (dutyStatus.onDuty) {
-        await tx.taskWorkSession.create({
-          data: {
-            taskId: createdTask.id,
-            userId: createdTask.ownerId,
-            startedAt: now,
-            source: "AUTO",
-          },
-        });
-        await tx.task.update({
-          where: { id: createdTask.id },
-          data: { lastStartedAt: now },
-        });
-      }
-    }
-
     await tx.activityLog.create({
       data: {
         userId: createdTask.ownerId,
@@ -322,15 +315,22 @@ export async function POST(request) {
     });
   });
 
+  const computed = await computeTaskSpentTime(prisma, task.id, task.ownerId);
+
   return buildSuccess(
     "Task created.",
     {
       task: {
         ...task,
-        totalTimeSpent: resolveTotalTimeSpent(task),
+        spentTimeSeconds: computed.effectiveSpentSeconds,
+        breakSeconds: computed.breakSeconds,
+        dutyOverlapSeconds: computed.dutyOverlapSeconds,
+        rawWorkSeconds: computed.rawWorkSeconds,
+        lastComputedAt: computed.lastComputedAt,
+        isOnDutyNow: computed.isOnDutyNow,
+        isWFHNow: computed.isWFHNow,
+        isOffDutyNow: computed.isOffDutyNow,
         activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
-        activeWorkSession:
-          task.workSessions?.find((session) => !session.endedAt) ?? null,
       },
     },
     201
