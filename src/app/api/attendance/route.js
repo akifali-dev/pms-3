@@ -6,6 +6,7 @@ import {
   ensureAuthenticated,
   getAuthContext,
 } from "@/lib/api";
+import { endActiveSessionsAtTime } from "@/lib/taskWorkSessions";
 
 function isLeader(role) {
   return PROJECT_MANAGEMENT_ROLES.includes(role);
@@ -163,25 +164,33 @@ export async function POST(request) {
     );
   }
 
-  const attendance = await prisma.attendance.upsert({
-    where: { userId_date: { userId: targetUserId, date } },
-    update: {
-      inTime,
-      outTime,
-      note: normalizeNote(body?.note),
-      userId: targetUserId,
-      date,
-    },
-    create: {
-      userId: targetUserId,
-      date,
-      inTime,
-      outTime,
-      note: normalizeNote(body?.note),
-    },
-    include: {
-      user: { select: { id: true, name: true, role: true, email: true } },
-    },
+  const attendance = await prisma.$transaction(async (tx) => {
+    const saved = await tx.attendance.upsert({
+      where: { userId_date: { userId: targetUserId, date } },
+      update: {
+        inTime,
+        outTime,
+        note: normalizeNote(body?.note),
+        userId: targetUserId,
+        date,
+      },
+      create: {
+        userId: targetUserId,
+        date,
+        inTime,
+        outTime,
+        note: normalizeNote(body?.note),
+      },
+      include: {
+        user: { select: { id: true, name: true, role: true, email: true } },
+      },
+    });
+
+    if (outTime) {
+      await endActiveSessionsAtTime(tx, targetUserId, outTime);
+    }
+
+    return saved;
   });
 
   return buildSuccess("Attendance saved.", { attendance });
