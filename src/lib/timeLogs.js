@@ -21,6 +21,27 @@ export function calculateTotalTimeSpent(timeLogs, now = new Date()) {
   }, 0);
 }
 
+export function calculateSessionTimeSpent(workSessions) {
+  if (!Array.isArray(workSessions)) {
+    return 0;
+  }
+  return workSessions.reduce((total, session) => {
+    if (!session?.startedAt || !session?.endedAt) {
+      return total;
+    }
+    const startMs = new Date(session.startedAt).getTime();
+    const endMs = new Date(session.endedAt).getTime();
+    if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+      return total;
+    }
+    const durationSeconds =
+      Number(session.durationSeconds ?? 0) > 0
+        ? Number(session.durationSeconds)
+        : Math.max(0, Math.floor((endMs - startMs) / 1000));
+    return total + durationSeconds;
+  }, 0);
+}
+
 export function resolveTotalTimeSpent(task, now = new Date()) {
   if (!task) {
     return 0;
@@ -28,6 +49,10 @@ export function resolveTotalTimeSpent(task, now = new Date()) {
   const stored = Number(task.totalTimeSpent ?? 0);
   if (stored > 0) {
     return stored;
+  }
+  const sessions = task.workSessions ?? [];
+  if (sessions.length > 0) {
+    return calculateSessionTimeSpent(sessions);
   }
   const logs = task.timeLogs ?? [];
   const filteredLogs = task.lastStartedAt

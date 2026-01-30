@@ -7,6 +7,7 @@ import {
   isManagementRole,
 } from "@/lib/api";
 import { resolveTotalTimeSpent } from "@/lib/timeLogs";
+import { endSessionsPastCutoff } from "@/lib/taskWorkSessions";
 import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
 import { createNotification } from "@/lib/notifications";
 
@@ -27,6 +28,7 @@ async function getTask(taskId) {
       statusHistory: true,
       activityLogs: true,
       timeLogs: true,
+      workSessions: { orderBy: { startedAt: "desc" } },
       breaks: { orderBy: { startedAt: "desc" } },
     },
   });
@@ -57,6 +59,8 @@ export async function GET(request, { params }) {
     return buildError("Task id is required.", 400);
   }
 
+  await endSessionsPastCutoff(prisma, context.user.id, new Date());
+
   const task = await getTask(taskId);
   if (!task) {
     return buildError("Task not found.", 404);
@@ -71,6 +75,8 @@ export async function GET(request, { params }) {
       ...task,
       totalTimeSpent: resolveTotalTimeSpent(task),
       activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
+      activeWorkSession:
+        task.workSessions?.find((session) => !session.endedAt) ?? null,
     },
   });
 }
@@ -209,6 +215,7 @@ export async function PATCH(request, { params }) {
         statusHistory: true,
         activityLogs: true,
         timeLogs: true,
+        workSessions: { orderBy: { startedAt: "desc" } },
         breaks: { orderBy: { startedAt: "desc" } },
       },
     });
@@ -234,6 +241,8 @@ export async function PATCH(request, { params }) {
       ...updatedTask,
       totalTimeSpent: resolveTotalTimeSpent(updatedTask),
       activeBreak: updatedTask.breaks?.find((brk) => !brk.endedAt) ?? null,
+      activeWorkSession:
+        updatedTask.workSessions?.find((session) => !session.endedAt) ?? null,
     },
   });
 }

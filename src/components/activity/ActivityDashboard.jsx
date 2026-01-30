@@ -27,6 +27,11 @@ const manualCategories = [
   { id: "IDLE", label: "Idle time" },
 ];
 
+const logTypeOptions = [
+  { id: "MANUAL", label: "Manual" },
+  { id: "WFH", label: "Work From Home" },
+];
+
 function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -41,6 +46,28 @@ function formatDateOnly(value) {
     return "";
   }
   return date.toISOString().slice(0, 10);
+}
+
+function formatTimeOnly(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+
+function combineDateTime(dateValue, timeValue) {
+  if (!dateValue || !timeValue) {
+    return null;
+  }
+  const combined = new Date(`${dateValue}T${timeValue}`);
+  if (Number.isNaN(combined.getTime())) {
+    return null;
+  }
+  return combined.toISOString();
 }
 
 function getPeriodRange(period) {
@@ -147,16 +174,25 @@ export default function ActivityDashboard({
   const [logModal, setLogModal] = useState({ open: false, mode: "create" });
   const [activeLog, setActiveLog] = useState(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [taskOptions, setTaskOptions] = useState([]);
+  const [taskQuery, setTaskQuery] = useState("");
+  const [isTaskMenuOpen, setIsTaskMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+  const taskMenuRef = useRef(null);
 
   const [logForm, setLogForm] = useState({
+    type: "MANUAL",
     category: "LEARNING",
     date: formatDateOnly(new Date()),
     hoursSpent: 1,
     description: "",
+    startTime: "",
+    endTime: "",
+    taskId: "",
   });
 
   useOutsideClick(userMenuRef, () => setIsUserMenuOpen(false), isUserMenuOpen);
+  useOutsideClick(taskMenuRef, () => setIsTaskMenuOpen(false), isTaskMenuOpen);
 
   useEffect(() => {
     setIsHydrated(true);
@@ -173,6 +209,33 @@ export default function ActivityDashboard({
         user.email.toLowerCase().includes(query)
     );
   }, [userQuery, users]);
+
+  const filteredTaskOptions = useMemo(() => {
+    const query = taskQuery.toLowerCase();
+    if (!query) {
+      return taskOptions;
+    }
+    return taskOptions.filter((task) =>
+      task.title.toLowerCase().includes(query)
+    );
+  }, [taskOptions, taskQuery]);
+
+  const wfhDurationHours = useMemo(() => {
+    if (logForm.type !== "WFH") {
+      return 0;
+    }
+    const start = combineDateTime(logForm.date, logForm.startTime);
+    const end = combineDateTime(logForm.date, logForm.endTime);
+    if (!start || !end) {
+      return 0;
+    }
+    const startTime = new Date(start);
+    const endTime = new Date(end);
+    if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) {
+      return 0;
+    }
+    return Math.max(0, (endTime.getTime() - startTime.getTime()) / 3600000);
+  }, [logForm.date, logForm.endTime, logForm.startTime, logForm.type]);
 
   const fetchLogs = async ({ targetUserId } = {}) => {
     setStatus({ loading: true, error: null });
@@ -238,6 +301,37 @@ export default function ActivityDashboard({
     loadCounts();
   }, [logs]);
 
+  useEffect(() => {
+    if (!logModal.open || logForm.type !== "WFH") {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadTasks = async () => {
+      try {
+        const response = await fetch("/api/tasks/assigned");
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Unable to load tasks.");
+        }
+        if (isMounted) {
+          setTaskOptions(data?.tasks ?? []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setTaskOptions([]);
+        }
+      }
+    };
+
+    loadTasks();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [logModal.open, logForm.type]);
+
   const badgeCounts = useMemo(() => {
     const counts = { all: logs.length, task: 0, manual: 0 };
     logs.forEach((log) => {
@@ -290,16 +384,36 @@ export default function ActivityDashboard({
 
   const handleLogChange = (event) => {
     const { name, value } = event.target;
+    if (name === "type") {
+      setLogForm((prev) => ({
+        ...prev,
+        type: value,
+        category: value === "WFH" ? "WFH" : "LEARNING",
+        hoursSpent: value === "WFH" ? 0 : prev.hoursSpent,
+        startTime: value === "WFH" ? prev.startTime : "",
+        endTime: value === "WFH" ? prev.endTime : "",
+        taskId: value === "WFH" ? prev.taskId : "",
+      }));
+      if (value !== "WFH") {
+        setTaskQuery("");
+      }
+      return;
+    }
     setLogForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const openCreateLogModal = () => {
     setLogForm({
+      type: "MANUAL",
       category: "LEARNING",
       date: formatDateOnly(new Date()),
       hoursSpent: 1,
       description: "",
+      startTime: "",
+      endTime: "",
+      taskId: "",
     });
+    setTaskQuery("");
     setActiveLog(null);
     setLogModal({ open: true, mode: "create" });
   };
@@ -307,11 +421,16 @@ export default function ActivityDashboard({
   const openEditLogModal = (log) => {
     setActiveLog(log);
     setLogForm({
+      type: log.type ?? "MANUAL",
       category: log.category ?? "LEARNING",
       date: formatDateOnly(log.date),
       hoursSpent: log.hoursSpent ?? 0,
       description: log.description ?? "",
+      startTime: formatTimeOnly(log.startTime),
+      endTime: formatTimeOnly(log.endTime),
+      taskId: log.taskId ?? "",
     });
+    setTaskQuery(log.task?.title ?? "");
     setLogModal({ open: true, mode: "edit" });
   };
 
@@ -331,11 +450,31 @@ export default function ActivityDashboard({
       return;
     }
     const payload = {
-      category: logForm.category,
+      type: logForm.type,
       date: logForm.date,
-      hoursSpent: Number(logForm.hoursSpent),
       description: logForm.description,
     };
+
+    if (logForm.type === "WFH") {
+      const startTime = combineDateTime(logForm.date, logForm.startTime);
+      const endTime = combineDateTime(logForm.date, logForm.endTime);
+      if (!startTime || !endTime) {
+        addToast({
+          title: "WFH time required",
+          message: "Please select a start and end time for WFH.",
+          variant: "warning",
+        });
+        return;
+      }
+      payload.startTime = startTime;
+      payload.endTime = endTime;
+      if (logForm.taskId) {
+        payload.taskId = logForm.taskId;
+      }
+    } else {
+      payload.category = logForm.category;
+      payload.hoursSpent = Number(logForm.hoursSpent);
+    }
 
     try {
       const response = await fetch(
@@ -517,6 +656,8 @@ export default function ActivityDashboard({
                 <div className="mt-4 space-y-3">
                   {entries.map((entry) => {
                     const isManualLog = entry.category !== "TASK";
+                    const isWFHLog = entry.log?.type === "WFH";
+                    const badgeLabel = isWFHLog ? "WFH" : entry.category;
                     const commentCount = isManualLog
                       ? commentCounts[entry.log.id] ?? 0
                       : 0;
@@ -553,7 +694,7 @@ export default function ActivityDashboard({
                               </button>
                             ) : null}
                             <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
-                              {entry.category}
+                              {badgeLabel}
                             </span>
                             <ActivityMenu
                               onLeaveComment={() => {
@@ -577,6 +718,13 @@ export default function ActivityDashboard({
                         {entry.hoursSpent > 0 ? (
                           <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
                             Hours: {entry.hoursSpent}
+                          </p>
+                        ) : null}
+                        {isWFHLog && entry.log?.startTime && entry.log?.endTime ? (
+                          <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                            WFH window:{" "}
+                            {formatDateTime(entry.log.startTime)} →{" "}
+                            {formatDateTime(entry.log.endTime)}
                           </p>
                         ) : null}
                       </div>
@@ -604,22 +752,39 @@ export default function ActivityDashboard({
           className="flex h-full flex-col"
         >
           <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1 hide-scrollbar">
-            <div className="grid gap-3 lg:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-4">
               <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
-                Category
+                Log type
                 <select
-                  name="category"
-                  value={logForm.category}
+                  name="type"
+                  value={logForm.type}
                   onChange={handleLogChange}
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 >
-                  {manualCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.label}
+                  {logTypeOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
                     </option>
                   ))}
                 </select>
               </label>
+              {logForm.type === "MANUAL" ? (
+                <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                  Category
+                  <select
+                    name="category"
+                    value={logForm.category}
+                    onChange={handleLogChange}
+                    className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                  >
+                    {manualCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
                 Date
                 <input
@@ -630,19 +795,139 @@ export default function ActivityDashboard({
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 />
               </label>
-              <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
-                Hours
-                <input
-                  type="number"
-                  name="hoursSpent"
-                  min="0"
-                  step="0.25"
-                  value={logForm.hoursSpent}
-                  onChange={handleLogChange}
-                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
-                />
-              </label>
+              {logForm.type === "MANUAL" ? (
+                <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                  Hours
+                  <input
+                    type="number"
+                    name="hoursSpent"
+                    min="0"
+                    step="0.25"
+                    value={logForm.hoursSpent}
+                    onChange={handleLogChange}
+                    className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                  />
+                </label>
+              ) : (
+                <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                  Duration (hours)
+                  <input
+                    type="text"
+                    value={wfhDurationHours.toFixed(2)}
+                    readOnly
+                    className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                  />
+                </label>
+              )}
             </div>
+            {logForm.type === "WFH" ? (
+              <div className="space-y-4 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                  WFH hours
+                </p>
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                    Start time
+                    <input
+                      type="time"
+                      name="startTime"
+                      value={logForm.startTime}
+                      onChange={handleLogChange}
+                      className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                    End time
+                    <input
+                      type="time"
+                      name="endTime"
+                      value={logForm.endTime}
+                      onChange={handleLogChange}
+                      className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                    />
+                  </label>
+                </div>
+                <div className="relative" ref={taskMenuRef}>
+                  <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                    Optional task allocation
+                    <input
+                      value={taskQuery}
+                      onChange={(event) => {
+                        setTaskQuery(event.target.value);
+                        setIsTaskMenuOpen(true);
+                        setLogForm((prev) => ({
+                          ...prev,
+                          taskId: "",
+                        }));
+                      }}
+                      onFocus={() => setIsTaskMenuOpen(true)}
+                      placeholder="Search your tasks"
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-4 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                    />
+                  </label>
+                  {logForm.taskId ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLogForm((prev) => ({ ...prev, taskId: "" }));
+                        setTaskQuery("");
+                        setIsTaskMenuOpen(false);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--color-text-muted)]"
+                      aria-label="Clear task selection"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                  {isTaskMenuOpen ? (
+                    <div className="absolute right-0 z-10 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-xs shadow-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLogForm((prev) => ({ ...prev, taskId: "" }));
+                          setTaskQuery("");
+                          setIsTaskMenuOpen(false);
+                        }}
+                        className="flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
+                      >
+                        <span className="text-sm font-semibold">No task</span>
+                        <span className="text-[11px] text-[color:var(--color-text-subtle)]">
+                          Count only toward duty hours
+                        </span>
+                      </button>
+                      {filteredTaskOptions.length ? (
+                        filteredTaskOptions.map((task) => (
+                          <button
+                            key={task.id}
+                            type="button"
+                            onClick={() => {
+                              setLogForm((prev) => ({
+                                ...prev,
+                                taskId: task.id,
+                              }));
+                              setTaskQuery(task.title);
+                              setIsTaskMenuOpen(false);
+                            }}
+                            className="flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
+                          >
+                            <span className="text-sm font-semibold">
+                              {task.title}
+                            </span>
+                            <span className="text-[11px] text-[color:var(--color-text-subtle)]">
+                              {task.milestone?.title}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="px-3 py-2 text-[color:var(--color-text-subtle)]">
+                          No tasks found.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
               Description
               <textarea

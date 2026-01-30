@@ -38,6 +38,12 @@ enum ActivityCategory {
   RESEARCH
   IDLE
   TASK
+  WFH
+}
+
+enum ActivityLogType {
+  MANUAL
+  WFH
 }
 
 enum NotificationType {
@@ -66,6 +72,11 @@ enum TaskBreakReason {
   OTHER
 }
 
+enum TaskWorkSessionSource {
+  AUTO
+  WFH
+}
+
 model User {
   id               String        @id @default(auto()) @map("_id") @db.ObjectId
   name             String
@@ -85,6 +96,7 @@ model User {
   taskTimeRequests TaskTimeRequest[] @relation("TaskTimeRequestCreator")
   taskTimeReviews  TaskTimeRequest[] @relation("TaskTimeRequestReviewer")
   taskBreaks       TaskBreak[]
+  taskWorkSessions TaskWorkSession[]
   notificationsAuthored Notification[] @relation("NotificationActor")
   notificationRecipients NotificationRecipient[]
   attendances      Attendance[]
@@ -146,6 +158,7 @@ model Task {
   timeLogs       TaskTimeLog[]
   timeRequests   TaskTimeRequest[]
   breaks         TaskBreak[]
+  workSessions   TaskWorkSession[]
   activityLogs   ActivityLog[]
   notifications  Notification[]
   createdAt      DateTime       @default(now())
@@ -220,6 +233,11 @@ model ActivityLog {
   description String
   hoursSpent  Float
   category    ActivityCategory @default(TASK)
+  type        ActivityLogType  @default(MANUAL)
+  startTime   DateTime?
+  endTime     DateTime?
+  durationSeconds Int          @default(0)
+  workSession TaskWorkSession?
 }
 
 model Attendance {
@@ -236,6 +254,26 @@ model Attendance {
   @@unique([userId, date])
   @@index([userId])
   @@index([date])
+}
+
+model TaskWorkSession {
+  id          String                @id @default(auto()) @map("_id") @db.ObjectId
+  taskId      String                @db.ObjectId
+  task        Task                  @relation(fields: [taskId], references: [id])
+  userId      String                @db.ObjectId
+  user        User                  @relation(fields: [userId], references: [id])
+  activityLogId String?             @db.ObjectId
+  activityLog ActivityLog?          @relation(fields: [activityLogId], references: [id])
+  startedAt   DateTime
+  endedAt     DateTime?
+  durationSeconds Int               @default(0)
+  source      TaskWorkSessionSource @default(AUTO)
+  createdAt   DateTime              @default(now())
+
+  @@unique([activityLogId])
+  @@index([taskId])
+  @@index([userId])
+  @@index([userId, endedAt])
 }
 
 model Comment {
