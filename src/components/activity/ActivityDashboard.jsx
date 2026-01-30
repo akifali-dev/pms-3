@@ -146,6 +146,7 @@ export default function ActivityDashboard({
   const [taskDrawer, setTaskDrawer] = useState({ open: false, task: null });
   const [logModal, setLogModal] = useState({ open: false, mode: "create" });
   const [activeLog, setActiveLog] = useState(null);
+  const [isHydrated, setIsHydrated] = useState(false);
   const userMenuRef = useRef(null);
 
   const [logForm, setLogForm] = useState({
@@ -156,6 +157,10 @@ export default function ActivityDashboard({
   });
 
   useOutsideClick(userMenuRef, () => setIsUserMenuOpen(false), isUserMenuOpen);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   const filteredUsers = useMemo(() => {
     const query = userQuery.toLowerCase();
@@ -521,7 +526,9 @@ export default function ActivityDashboard({
                         className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-subtle)]">
-                          <span>{formatDateTime(entry.timestamp)}</span>
+                          <span suppressHydrationWarning>
+                            {isHydrated ? formatDateTime(entry.timestamp) : ""}
+                          </span>
                           <div className="flex items-center gap-2">
                             {commentCount > 0 ? (
                               <button
