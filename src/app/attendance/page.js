@@ -53,6 +53,7 @@ export default async function AttendancePage() {
         orderBy: { date: "desc" },
         include: {
           user: { select: { id: true, name: true, email: true, role: true } },
+          wfhIntervals: { orderBy: { startAt: "asc" } },
         },
       });
     }

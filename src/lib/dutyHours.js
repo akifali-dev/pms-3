@@ -22,6 +22,22 @@ export function getCutoffTime(date) {
   return cutoff;
 }
 
+function isSameUtcDate(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+  const leftDate = new Date(left);
+  const rightDate = new Date(right);
+  if (Number.isNaN(leftDate.getTime()) || Number.isNaN(rightDate.getTime())) {
+    return false;
+  }
+  return (
+    leftDate.getUTCFullYear() === rightDate.getUTCFullYear() &&
+    leftDate.getUTCMonth() === rightDate.getUTCMonth() &&
+    leftDate.getUTCDate() === rightDate.getUTCDate()
+  );
+}
+
 function normalizeInterval(interval) {
   if (!interval?.start || !interval?.end) {
     return null;
@@ -83,39 +99,36 @@ export function findDutyWindowForTime(windows, time) {
   return windows.find((window) => now >= window.start && now <= window.end) ?? null;
 }
 
-export async function getDutyWindows(prismaClient, userId, date) {
+export async function getDutyIntervals(prismaClient, userId, date, now = new Date()) {
   const bounds = getDayBounds(date);
   if (!bounds || !userId) {
     return [];
   }
   const { start, end } = bounds;
 
-  const [attendance, wfhLogs] = await Promise.all([
-    prismaClient.attendance.findFirst({
-      where: {
-        userId,
-        date: { gte: start, lte: end },
-      },
-    }),
-    prismaClient.activityLog.findMany({
-      where: {
-        userId,
-        type: "WFH",
-        startTime: { not: null },
-        endTime: { not: null },
-        date: { gte: start, lte: end },
-      },
-    }),
-  ]);
+  const attendance = await prismaClient.attendance.findFirst({
+    where: {
+      userId,
+      date: { gte: start, lte: end },
+    },
+    include: {
+      wfhIntervals: true,
+    },
+  });
 
   const intervals = [];
 
   if (attendance?.inTime) {
     const startTime = new Date(attendance.inTime);
-    const endTime =
-      attendance.outTime ||
-      getCutoffTime(attendance.inTime) ||
-      null;
+    const cutoffTime = getCutoffTime(attendance.inTime);
+    let endTime = attendance.outTime || null;
+    if (!endTime && cutoffTime) {
+      endTime = isSameUtcDate(attendance.date, now)
+        ? now > cutoffTime
+          ? cutoffTime
+          : now
+        : cutoffTime;
+    }
     if (endTime) {
       intervals.push({
         start: startTime,
@@ -125,17 +138,95 @@ export async function getDutyWindows(prismaClient, userId, date) {
     }
   }
 
-  if (Array.isArray(wfhLogs)) {
-    wfhLogs.forEach((log) => {
-      if (log.startTime && log.endTime) {
+  if (Array.isArray(attendance?.wfhIntervals)) {
+    attendance.wfhIntervals.forEach((interval) => {
+      if (interval.startAt && interval.endAt) {
         intervals.push({
-          start: log.startTime,
-          end: log.endTime,
+          start: interval.startAt,
+          end: interval.endAt,
           source: "WFH",
         });
       }
     });
   }
 
+  return intervals;
+}
+
+export async function getDutyIntervalsForRange(
+  prismaClient,
+  userId,
+  startTime,
+  endTime,
+  now = new Date()
+) {
+  if (!userId || !startTime || !endTime) {
+    return [];
+  }
+  const startDate = new Date(startTime);
+  const endDate = new Date(endTime);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return [];
+  }
+  const startDay = new Date(
+    Date.UTC(
+      startDate.getUTCFullYear(),
+      startDate.getUTCMonth(),
+      startDate.getUTCDate()
+    )
+  );
+  const endDay = new Date(
+    Date.UTC(
+      endDate.getUTCFullYear(),
+      endDate.getUTCMonth(),
+      endDate.getUTCDate()
+    )
+  );
+  const attendances = await prismaClient.attendance.findMany({
+    where: {
+      userId,
+      date: { gte: startDay, lte: endDay },
+    },
+    include: {
+      wfhIntervals: true,
+    },
+  });
+
+  const intervals = [];
+
+  attendances.forEach((attendance) => {
+    if (attendance?.inTime) {
+      const start = new Date(attendance.inTime);
+      const cutoffTime = getCutoffTime(attendance.inTime);
+      let end = attendance.outTime || null;
+      if (!end && cutoffTime) {
+        end = isSameUtcDate(attendance.date, now)
+          ? now > cutoffTime
+            ? cutoffTime
+            : now
+          : cutoffTime;
+      }
+      if (end) {
+        intervals.push({ start, end, source: "ATTENDANCE" });
+      }
+    }
+    if (Array.isArray(attendance?.wfhIntervals)) {
+      attendance.wfhIntervals.forEach((interval) => {
+        if (interval.startAt && interval.endAt) {
+          intervals.push({
+            start: interval.startAt,
+            end: interval.endAt,
+            source: "WFH",
+          });
+        }
+      });
+    }
+  });
+
+  return intervals;
+}
+
+export async function getDutyWindows(prismaClient, userId, date, now = new Date()) {
+  const intervals = await getDutyIntervals(prismaClient, userId, date, now);
   return mergeIntervals(intervals);
 }
