@@ -78,15 +78,37 @@ const calculateBreakSeconds = (breaks, sessionStart) => {
   }, 0);
 };
 
-const getEffectiveSpentSeconds = (task, nowMs = Date.now()) => {
+const isWithinDutyWindow = (windows, nowMs) => {
+  if (!Array.isArray(windows) || windows.length === 0) {
+    return false;
+  }
+  const now = new Date(nowMs);
+  if (Number.isNaN(now.getTime())) {
+    return false;
+  }
+  return windows.some((window) => {
+    const start = new Date(window.start).getTime();
+    const end = new Date(window.end).getTime();
+    if (Number.isNaN(start) || Number.isNaN(end)) {
+      return false;
+    }
+    return now >= start && now <= end;
+  });
+};
+
+const getEffectiveSpentSeconds = (task, nowMs = Date.now(), dutyWindows = []) => {
   if (!task) {
     return 0;
   }
   const baseSeconds = Number(task.totalTimeSpent ?? 0);
-  if (!task.lastStartedAt) {
+  if (!task.activeWorkSession?.startedAt) {
     return baseSeconds;
   }
-  const sessionStart = new Date(task.lastStartedAt);
+  const isOnDuty = isWithinDutyWindow(dutyWindows, nowMs);
+  if (!isOnDuty) {
+    return baseSeconds;
+  }
+  const sessionStart = new Date(task.activeWorkSession.startedAt);
   const sessionStartMs = sessionStart.getTime();
   if (Number.isNaN(sessionStartMs)) {
     return baseSeconds;
@@ -164,6 +186,7 @@ export default function TaskBoard({
   const [activeTab, setActiveTab] = useState("overview");
   const [liveSpentSeconds, setLiveSpentSeconds] = useState(0);
   const [timeNow, setTimeNow] = useState(Date.now());
+  const [dutyWindows, setDutyWindows] = useState([]);
   const [timeRequestOpen, setTimeRequestOpen] = useState(false);
   const [timeRequestForm, setTimeRequestForm] = useState({
     hours: "",
@@ -186,16 +209,48 @@ export default function TaskBoard({
   }, [tasks]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchDutyWindows = async () => {
+      try {
+        const dateParam = new Date().toLocaleDateString("en-CA");
+        const response = await fetch(
+          `/api/duty-windows?date=${encodeURIComponent(dateParam)}`
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Unable to load duty windows.");
+        }
+        if (isMounted) {
+          setDutyWindows(data?.windows ?? []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setDutyWindows([]);
+        }
+      }
+    };
+
+    fetchDutyWindows();
+    const interval = setInterval(fetchDutyWindows, 5 * 60 * 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
     const hasActiveSession = taskItems.some(
-      (task) => task.lastStartedAt && !task.activeBreak
+      (task) => task.activeWorkSession?.startedAt && !task.activeBreak
     );
-    if (!hasActiveSession) {
+    const onDuty = isWithinDutyWindow(dutyWindows, Date.now());
+    if (!hasActiveSession || !onDuty) {
       setTimeNow(Date.now());
       return undefined;
     }
     const interval = setInterval(() => setTimeNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [taskItems]);
+  }, [taskItems, dutyWindows]);
 
   useEffect(() => {
     const taskId = searchParams?.get("taskId");
@@ -296,10 +351,11 @@ export default function TaskBoard({
     }
     const updateLive = () => {
       const baseSeconds = Number(selectedTask.totalTimeSpent ?? 0);
-      const sessionStart = selectedTask.lastStartedAt
-        ? new Date(selectedTask.lastStartedAt)
+      const sessionStart = selectedTask.activeWorkSession?.startedAt
+        ? new Date(selectedTask.activeWorkSession.startedAt)
         : null;
-      if (!sessionStart) {
+      const onDuty = isWithinDutyWindow(dutyWindows, Date.now());
+      if (!sessionStart || !onDuty) {
         setLiveSpentSeconds(baseSeconds);
         return;
       }
@@ -320,7 +376,11 @@ export default function TaskBoard({
       );
     };
     updateLive();
-    if (selectedTask.lastStartedAt && !selectedTask.activeBreak) {
+    if (selectedTask.activeWorkSession?.startedAt && !selectedTask.activeBreak) {
+      const onDuty = isWithinDutyWindow(dutyWindows, Date.now());
+      if (!onDuty) {
+        return undefined;
+      }
       const interval = setInterval(updateLive, 1000);
       return () => clearInterval(interval);
     }
@@ -328,9 +388,10 @@ export default function TaskBoard({
   }, [
     selectedTask?.id,
     selectedTask?.totalTimeSpent,
-    selectedTask?.lastStartedAt,
+    selectedTask?.activeWorkSession?.startedAt,
     selectedTask?.activeBreak?.startedAt,
     selectedTask?.breaks,
+    dutyWindows,
   ]);
 
   useEffect(() => {
@@ -888,7 +949,8 @@ export default function TaskBoard({
                 );
                 const effectiveSpentSeconds = getEffectiveSpentSeconds(
                   task,
-                  timeNow
+                  timeNow,
+                  dutyWindows
                 );
                 const estimatedLabel =
                   estimatedSeconds > 0

@@ -12,6 +12,7 @@ import {
 import { TASK_STATUSES } from "@/lib/kanban";
 import { getChecklistForTaskType } from "@/lib/taskChecklists";
 import { resolveTotalTimeSpent } from "@/lib/timeLogs";
+import { endSessionsPastCutoff, getOnDutyStatus } from "@/lib/taskWorkSessions";
 import { createNotification, getProjectMemberIds } from "@/lib/notifications";
 
 export async function GET(request) {
@@ -31,6 +32,8 @@ export async function GET(request) {
   if (!milestoneId) {
     return buildError("Milestone id is required.", 400);
   }
+
+  await endSessionsPastCutoff(prisma, context.user.id, new Date());
 
   const milestone = await prisma.milestone.findUnique({
     where: { id: milestoneId },
@@ -81,6 +84,7 @@ export async function GET(request) {
       statusHistory: true,
       activityLogs: true,
       timeLogs: true,
+      workSessions: { orderBy: { startedAt: "desc" } },
       breaks: { orderBy: { startedAt: "desc" } },
     },
   });
@@ -89,6 +93,8 @@ export async function GET(request) {
     ...task,
     totalTimeSpent: resolveTotalTimeSpent(task),
     activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
+    activeWorkSession:
+      task.workSessions?.find((session) => !session.endedAt) ?? null,
   }));
 
   return buildSuccess("Tasks loaded.", { tasks: hydratedTasks });
@@ -183,6 +189,7 @@ export async function POST(request) {
   }
 
   const task = await prisma.$transaction(async (tx) => {
+    const now = new Date();
     const createdTask = await tx.task.create({
       data: {
         title,
@@ -193,7 +200,7 @@ export async function POST(request) {
         ownerId: resolvedOwnerId,
         estimatedHours,
         reworkCount: 0,
-        lastStartedAt: status === "IN_PROGRESS" ? new Date() : null,
+        lastStartedAt: null,
       },
       include: {
         owner: { select: { id: true, name: true, email: true, role: true } },
@@ -204,6 +211,7 @@ export async function POST(request) {
         statusHistory: true,
         activityLogs: true,
         timeLogs: true,
+        workSessions: { orderBy: { startedAt: "desc" } },
         breaks: { orderBy: { startedAt: "desc" } },
       },
     });
@@ -232,9 +240,27 @@ export async function POST(request) {
         data: {
           taskId: createdTask.id,
           status,
-          startedAt: new Date(),
+          startedAt: now,
         },
       });
+    }
+
+    if (["IN_PROGRESS", "DEV_TEST"].includes(status)) {
+      const dutyStatus = await getOnDutyStatus(tx, createdTask.ownerId, now);
+      if (dutyStatus.onDuty) {
+        await tx.taskWorkSession.create({
+          data: {
+            taskId: createdTask.id,
+            userId: createdTask.ownerId,
+            startedAt: now,
+            source: "AUTO",
+          },
+        });
+        await tx.task.update({
+          where: { id: createdTask.id },
+          data: { lastStartedAt: now },
+        });
+      }
     }
 
     await tx.activityLog.create({
@@ -290,6 +316,7 @@ export async function POST(request) {
         statusHistory: true,
         activityLogs: true,
         timeLogs: true,
+        workSessions: { orderBy: { startedAt: "desc" } },
         breaks: { orderBy: { startedAt: "desc" } },
       },
     });
@@ -302,6 +329,8 @@ export async function POST(request) {
         ...task,
         totalTimeSpent: resolveTotalTimeSpent(task),
         activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
+        activeWorkSession:
+          task.workSessions?.find((session) => !session.endedAt) ?? null,
       },
     },
     201
