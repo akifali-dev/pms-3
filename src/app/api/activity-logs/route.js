@@ -6,7 +6,6 @@ import {
   ensureAuthenticated,
   ensureRole,
   getAuthContext,
-  isAdminRole,
 } from "@/lib/api";
 import { createNotification, getTaskMemberIds } from "@/lib/notifications";
 
@@ -18,6 +17,7 @@ export async function GET(request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const scope = searchParams.get("scope");
   const userId = searchParams.get("userId");
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
@@ -25,8 +25,9 @@ export async function GET(request) {
   const taskId = searchParams.get("taskId");
 
   const where = {};
+  const canViewAll = ["CEO", "PM", "CTO"].includes(context.role);
 
-  if (isAdminRole(context.role)) {
+  if (canViewAll && scope === "all") {
     if (userId) {
       where.userId = userId;
     }
@@ -62,7 +63,15 @@ export async function GET(request) {
     where,
     orderBy: { date: "desc" },
     include: {
-      user: { select: { id: true, name: true, email: true, role: true } },
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          avatarLetter: true,
+        },
+      },
       task: { select: { id: true, title: true, ownerId: true } },
     },
   });
