@@ -7,13 +7,7 @@ import {
   isManagementRole,
 } from "@/lib/api";
 import { getStatusLabel, isValidTransition } from "@/lib/kanban";
-import { resolveTotalTimeSpent } from "@/lib/timeLogs";
-import {
-  clampSessionEndToDutyWindow,
-  endSessionsPastCutoff,
-  endWorkSession,
-  getOnDutyStatus,
-} from "@/lib/taskWorkSessions";
+import { computeTaskSpentTime } from "@/lib/taskTimeCalculator";
 import {
   createNotification,
   getLeadershipUserIds,
@@ -160,56 +154,29 @@ export async function PATCH(request, { params }) {
   }
 
   let updated;
+  let offDutyWarning = null;
   try {
     updated = await prisma.$transaction(async (tx) => {
       const now = new Date();
-      const shouldStartSession = ["IN_PROGRESS", "DEV_TEST"].includes(nextStatus);
-
-      await endSessionsPastCutoff(tx, task.ownerId, now);
+      const shouldTrackWork = ["IN_PROGRESS", "DEV_TEST"].includes(nextStatus);
 
       const currentTask = await tx.task.findUnique({
         where: { id: taskId },
         include: {
           timeLogs: true,
-          workSessions: { orderBy: { startedAt: "desc" } },
         },
       });
 
-      const activeSession =
-        currentTask?.workSessions?.find((session) => !session.endedAt) ?? null;
-
-      if (shouldStartSession && !activeSession) {
-        const dutyStatus = await getOnDutyStatus(tx, task.ownerId, now);
-        if (!dutyStatus.onDuty) {
-          throw new Error("OFF_DUTY");
-        }
-        await tx.taskWorkSession.create({
-          data: {
-            taskId,
-            userId: task.ownerId,
-            startedAt: now,
-            source: "AUTO",
-          },
-        });
-        updates.lastStartedAt = now;
-      }
-
-      if (nextStatus === "TESTING" && activeSession) {
-        const clampedEnd = await clampSessionEndToDutyWindow(
+      if (shouldTrackWork) {
+        const dutyStatus = await computeTaskSpentTime(
           tx,
-          task.ownerId,
-          activeSession.startedAt,
-          now
+          taskId,
+          task.ownerId
         );
-        await endWorkSession({
-          prismaClient: tx,
-          session: activeSession,
-          endedAt: clampedEnd,
-          includeBreaks: true,
-        });
-        updates.lastStartedAt = null;
-      } else if (nextStatus === "TESTING") {
-        updates.lastStartedAt = null;
+        if (!dutyStatus.isOnDutyNow) {
+          offDutyWarning =
+            "You’re off duty; time will not count until you’re on duty.";
+        }
       }
 
       await tx.task.update({
@@ -282,30 +249,33 @@ export async function PATCH(request, { params }) {
           checklistItems: true,
           statusHistory: true,
           timeLogs: true,
-          workSessions: { orderBy: { startedAt: "desc" } },
           breaks: { orderBy: { startedAt: "desc" } },
         },
       });
     });
   } catch (error) {
-    if (error?.message === "OFF_DUTY") {
-      return buildError(
-        "You are off duty. Start tomorrow or add WFH.",
-        400
-      );
-    }
     throw error;
   }
 
-  const totalTimeSpent = resolveTotalTimeSpent(updated);
+  const computed = await computeTaskSpentTime(
+    prisma,
+    updated.id,
+    updated.ownerId
+  );
 
   return buildSuccess("Task updated.", {
     task: {
       ...updated,
-      totalTimeSpent,
+      spentTimeSeconds: computed.effectiveSpentSeconds,
+      breakSeconds: computed.breakSeconds,
+      dutyOverlapSeconds: computed.dutyOverlapSeconds,
+      rawWorkSeconds: computed.rawWorkSeconds,
+      lastComputedAt: computed.lastComputedAt,
+      isOnDutyNow: computed.isOnDutyNow,
+      isWFHNow: computed.isWFHNow,
+      isOffDutyNow: computed.isOffDutyNow,
       activeBreak: updated.breaks?.find((brk) => !brk.endedAt) ?? null,
-      activeWorkSession:
-        updated.workSessions?.find((session) => !session.endedAt) ?? null,
     },
+    warning: offDutyWarning,
   });
 }

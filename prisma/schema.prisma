@@ -248,12 +248,24 @@ model Attendance {
   inTime    DateTime?
   outTime   DateTime?
   note      String?
+  wfhIntervals AttendanceWFHInterval[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, date])
   @@index([userId])
   @@index([date])
+}
+
+model AttendanceWFHInterval {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  attendanceId String     @db.ObjectId
+  attendance   Attendance @relation(fields: [attendanceId], references: [id])
+  startAt      DateTime
+  endAt        DateTime
+  createdAt    DateTime   @default(now())
+
+  @@index([attendanceId])
 }
 
 model TaskWorkSession {

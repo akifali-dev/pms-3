@@ -10,17 +10,6 @@ import {
 } from "@/lib/api";
 import { createNotification, getTaskMemberIds } from "@/lib/notifications";
 
-function parseDateTime(value) {
-  if (!value) {
-    return null;
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return parsed;
-}
-
 export async function GET(request) {
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
@@ -99,8 +88,6 @@ export async function POST(request) {
   const type = body?.type?.toString().trim().toUpperCase() || "MANUAL";
   const category = body?.category?.toString().trim().toUpperCase();
   const date = body?.date ? new Date(body.date) : new Date();
-  const startTime = parseDateTime(body?.startTime);
-  const endTime = parseDateTime(body?.endTime);
 
   if (!description) {
     return buildError("Description is required.", 400);
@@ -110,37 +97,22 @@ export async function POST(request) {
     return buildError("Date must be valid.", 400);
   }
 
-  if (!["MANUAL", "WFH"].includes(type)) {
-    return buildError("Log type must be either manual or WFH.", 400);
+  if (!["MANUAL"].includes(type)) {
+    return buildError("Log type must be manual.", 400);
   }
 
-  let hoursSpent = Number(body?.hoursSpent ?? 0);
-  let durationSeconds = 0;
+  const hoursSpent = Number(body?.hoursSpent ?? 0);
+  const durationSeconds = 0;
   let resolvedCategory = category;
 
-  if (type === "WFH") {
-    if (!startTime || !endTime) {
-      return buildError("WFH logs require a start and end time.", 400);
-    }
-    if (endTime <= startTime) {
-      return buildError("End time must be after start time.", 400);
-    }
-    durationSeconds = Math.max(
-      0,
-      Math.floor((endTime.getTime() - startTime.getTime()) / 1000)
+  if (!Number.isFinite(hoursSpent) || hoursSpent < 0) {
+    return buildError("Hours spent must be a valid number.", 400);
+  }
+  if (!resolvedCategory || !["LEARNING", "RESEARCH", "IDLE"].includes(resolvedCategory)) {
+    return buildError(
+      "Category must be one of: learning, research, idle.",
+      400
     );
-    hoursSpent = durationSeconds / 3600;
-    resolvedCategory = "WFH";
-  } else {
-    if (!Number.isFinite(hoursSpent) || hoursSpent < 0) {
-      return buildError("Hours spent must be a valid number.", 400);
-    }
-    if (!resolvedCategory || !["LEARNING", "RESEARCH", "IDLE"].includes(resolvedCategory)) {
-      return buildError(
-        "Category must be one of: learning, research, idle.",
-        400
-      );
-    }
   }
 
   if (taskId) {
@@ -176,8 +148,8 @@ export async function POST(request) {
         category: resolvedCategory,
         taskId,
         type,
-        startTime: type === "WFH" ? startTime : null,
-        endTime: type === "WFH" ? endTime : null,
+        startTime: null,
+        endTime: null,
         durationSeconds,
       },
       include: {
@@ -185,27 +157,6 @@ export async function POST(request) {
         task: { select: { id: true, title: true, ownerId: true } },
       },
     });
-
-    if (type === "WFH" && taskId) {
-      await tx.taskWorkSession.create({
-        data: {
-          taskId,
-          userId: context.user.id,
-          startedAt: startTime,
-          endedAt: endTime,
-          durationSeconds,
-          source: "WFH",
-          activityLogId: createdLog.id,
-        },
-      });
-
-      await tx.task.update({
-        where: { id: taskId },
-        data: {
-          totalTimeSpent: { increment: durationSeconds },
-        },
-      });
-    }
 
     return createdLog;
   });

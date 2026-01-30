@@ -6,7 +6,6 @@ import {
   ensureAuthenticated,
   getAuthContext,
 } from "@/lib/api";
-import { endActiveSessionsAtTime } from "@/lib/taskWorkSessions";
 
 function isLeader(role) {
   return PROJECT_MANAGEMENT_ROLES.includes(role);
@@ -78,7 +77,7 @@ export async function PATCH(request, { params }) {
 
   const existing = await prisma.attendance.findUnique({
     where: { id: attendanceId },
-    include: { user: { select: { id: true } } },
+    include: { user: { select: { id: true } }, wfhIntervals: true },
   });
 
   if (!existing) {
@@ -131,26 +130,19 @@ export async function PATCH(request, { params }) {
   }
 
   try {
-    const attendance = await prisma.$transaction(async (tx) => {
-      const saved = await tx.attendance.update({
-        where: { id: attendanceId },
-        data: {
-          date: nextDate,
-          inTime,
-          outTime,
-          note: normalizeNote(body?.note),
-          userId: targetUserId,
-        },
-        include: {
-          user: { select: { id: true, name: true, role: true, email: true } },
-        },
-      });
-
-      if (outTime) {
-        await endActiveSessionsAtTime(tx, targetUserId, outTime);
-      }
-
-      return saved;
+    const attendance = await prisma.attendance.update({
+      where: { id: attendanceId },
+      data: {
+        date: nextDate,
+        inTime,
+        outTime,
+        note: normalizeNote(body?.note),
+        userId: targetUserId,
+      },
+      include: {
+        user: { select: { id: true, name: true, role: true, email: true } },
+        wfhIntervals: { orderBy: { startAt: "asc" } },
+      },
     });
 
     return buildSuccess("Attendance saved.", { attendance });
