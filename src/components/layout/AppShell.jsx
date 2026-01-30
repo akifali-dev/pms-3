@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import { getRoleById } from "@/lib/roles";
@@ -10,18 +10,28 @@ import { useToast } from "@/components/ui/ToastProvider";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import NotificationDrawer from "@/components/notifications/NotificationDrawer";
 import RouteProgress from "@/components/layout/RouteProgress";
+import {
+  NotificationCountsProvider,
+  useNotificationCounts,
+} from "@/components/notifications/NotificationCountsContext";
 
 const SIDEBAR_STATE_KEY = "pms.sidebar.collapsed";
 
-export default function AppShell({ children, session }) {
+function normalizeTitle(value) {
+  if (!value) return "";
+  return value.replace(/^\(\d+\)\s*/, "").replace(/^●\s*/, "");
+}
+
+function AppShellContent({ children, session }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { addToast } = useToast();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const profileRef = useRef(null);
   const baseTitleRef = useRef(null);
+  const { counts } = useNotificationCounts();
   const role = getRoleById(session?.role);
   const roleLabel = role?.label ?? "Guest";
   const userName = session?.name ?? "Guest";
@@ -41,16 +51,20 @@ export default function AppShell({ children, session }) {
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-    if (!baseTitleRef.current) {
-      baseTitleRef.current = document.title;
-    }
-    const baseTitle = baseTitleRef.current ?? document.title;
-    if (unreadNotifications > 0) {
-      document.title = `(${unreadNotifications}) ${baseTitle}`;
+    const cleaned = normalizeTitle(document.title);
+    baseTitleRef.current = cleaned || baseTitleRef.current;
+  }, [pathname]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const baseTitle = baseTitleRef.current ?? normalizeTitle(document.title);
+    if (counts.total > 0) {
+      document.title = `(${counts.total}) ${baseTitle}`;
     } else {
+      baseTitleRef.current = normalizeTitle(document.title);
       document.title = baseTitle;
     }
-  }, [unreadNotifications]);
+  }, [counts.total]);
 
   useOutsideClick(profileRef, () => setIsProfileOpen(false), isProfileOpen);
 
@@ -112,9 +126,9 @@ export default function AppShell({ children, session }) {
                 strokeLinejoin="round"
               />
             </svg>
-            {unreadNotifications > 0 ? (
+            {counts.total > 0 ? (
               <span className="absolute -right-1 -top-1 inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-[color:var(--color-accent)] px-1 text-[10px] font-semibold text-white">
-                {unreadNotifications}
+                {counts.total}
               </span>
             ) : null}
           </button>
@@ -177,8 +191,15 @@ export default function AppShell({ children, session }) {
       <NotificationDrawer
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
-        onUnreadChange={setUnreadNotifications}
       />
     </div>
+  );
+}
+
+export default function AppShell({ children, session }) {
+  return (
+    <NotificationCountsProvider>
+      <AppShellContent session={session}>{children}</AppShellContent>
+    </NotificationCountsProvider>
   );
 }
