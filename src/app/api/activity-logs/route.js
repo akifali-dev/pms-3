@@ -69,7 +69,6 @@ export async function GET(request) {
           name: true,
           email: true,
           role: true,
-          avatarLetter: true,
         },
       },
       task: { select: { id: true, title: true, ownerId: true } },

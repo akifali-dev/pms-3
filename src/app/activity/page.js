@@ -24,7 +24,7 @@ export default async function ActivityPage() {
       users = await prisma.user.findMany({
         where: userFilter,
         orderBy: { name: "asc" },
-        select: { id: true, name: true, email: true, role: true, avatarLetter: true },
+        select: { id: true, name: true, email: true, role: true },
       });
 
       activityLogs = await prisma.activityLog.findMany({
@@ -37,7 +37,6 @@ export default async function ActivityPage() {
               name: true,
               email: true,
               role: true,
-              avatarLetter: true,
             },
           },
           task: { select: { id: true, title: true, ownerId: true } },
