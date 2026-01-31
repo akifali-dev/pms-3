@@ -8,6 +8,7 @@ import CommentThread from "@/components/comments/CommentThread";
 import { useToast } from "@/components/ui/ToastProvider";
 import PageHeader from "@/components/layout/PageHeader";
 import useOutsideClick from "@/hooks/useOutsideClick";
+import AnalyticsResults from "@/components/analytics/AnalyticsResults";
 
 const periodOptions = [
   { id: "daily", label: "Daily" },
@@ -46,8 +47,8 @@ function formatDateOnly(value) {
 }
 
 
-function getPeriodRange(period) {
-  const now = new Date();
+function getPeriodRange(period, baseDate = new Date()) {
+  const now = new Date(baseDate);
   const start = new Date(now);
   const end = new Date(now);
 
@@ -152,6 +153,7 @@ export default function ActivityDashboard({
   const { addToast } = useToast();
   const isManager = MANAGEMENT_ROLES.includes(normalizeRole(currentUser?.role));
   const [period, setPeriod] = useState("daily");
+  const [selectedDate, setSelectedDate] = useState(formatDateOnly(new Date()));
   const [activeBadge, setActiveBadge] = useState("all");
   const [logs, setLogs] = useState(initialLogs);
   const [status, setStatus] = useState({ loading: false, error: null });
@@ -196,7 +198,7 @@ export default function ActivityDashboard({
     setStatus({ loading: true, error: null });
     setLogs([]);
     try {
-      const { start, end } = getPeriodRange(period);
+      const { start, end } = getPeriodRange(period, selectedDate);
       const params = new URLSearchParams();
       params.set("startDate", start.toISOString());
       params.set("endDate", end.toISOString());
@@ -225,7 +227,7 @@ export default function ActivityDashboard({
 
   useEffect(() => {
     fetchLogs({ targetUserId: selectedUser?.id ?? "" });
-  }, [period, selectedUser?.id, isManager]);
+  }, [period, selectedDate, selectedUser?.id, isManager]);
 
   useEffect(() => {
     const manualLogIds = logs
@@ -424,6 +426,12 @@ export default function ActivityDashboard({
               ))}
             </select>
           </div>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+            className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-xs font-semibold text-[color:var(--color-text-muted)]"
+          />
         </div>
 
         {isManager ? (
@@ -496,6 +504,19 @@ export default function ActivityDashboard({
         </div>
       ) : (
         <div className="space-y-4">
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4">
+            <p className="text-sm font-semibold text-[color:var(--color-text)]">
+              Workday analytics
+            </p>
+            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              Daily timeline, pauses, and utilization from attendance + task events.
+            </p>
+          </div>
+          <AnalyticsResults
+            period={period}
+            date={selectedDate}
+            userId={selectedUser?.id ?? null}
+          />
           {sortedLogs.length === 0 ? (
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 text-sm text-[color:var(--color-text-subtle)]">
               No activity in this range.
