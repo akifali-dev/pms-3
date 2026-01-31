@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import PageHeader from "@/components/layout/PageHeader";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import AnalyticsResults from "@/components/analytics/AnalyticsResults";
+import ClientOnly from "@/components/ui/ClientOnly";
 
 const periodOptions = [
   { id: "daily", label: "Daily" },
@@ -153,7 +154,7 @@ export default function ActivityDashboard({
   const { addToast } = useToast();
   const isManager = MANAGEMENT_ROLES.includes(normalizeRole(currentUser?.role));
   const [period, setPeriod] = useState("daily");
-  const [selectedDate, setSelectedDate] = useState(formatDateOnly(new Date()));
+  const [selectedDate, setSelectedDate] = useState("");
   const [activeBadge, setActiveBadge] = useState("all");
   const [logs, setLogs] = useState(initialLogs);
   const [status, setStatus] = useState({ loading: false, error: null });
@@ -170,7 +171,7 @@ export default function ActivityDashboard({
   const [logForm, setLogForm] = useState({
     type: "MANUAL",
     category: "LEARNING",
-    date: formatDateOnly(new Date()),
+    date: "",
     hoursSpent: 1,
     description: "",
     taskId: "",
@@ -180,6 +181,9 @@ export default function ActivityDashboard({
 
   useEffect(() => {
     setIsHydrated(true);
+    const today = formatDateOnly(new Date());
+    setSelectedDate(today);
+    setLogForm((prev) => ({ ...prev, date: today }));
   }, []);
 
   const filteredUsers = useMemo(() => {
@@ -226,8 +230,11 @@ export default function ActivityDashboard({
   };
 
   useEffect(() => {
+    if (!isHydrated || !selectedDate) {
+      return;
+    }
     fetchLogs({ targetUserId: selectedUser?.id ?? "" });
-  }, [period, selectedDate, selectedUser?.id, isManager]);
+  }, [period, selectedDate, selectedUser?.id, isManager, isHydrated]);
 
   useEffect(() => {
     const manualLogIds = logs
@@ -512,11 +519,19 @@ export default function ActivityDashboard({
               Daily timeline, pauses, and utilization from attendance + task events.
             </p>
           </div>
-          <AnalyticsResults
-            period={period}
-            date={selectedDate}
-            userId={selectedUser?.id ?? null}
-          />
+          <ClientOnly
+            fallback={
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 text-sm text-[color:var(--color-text-muted)]">
+                Loading analytics...
+              </div>
+            }
+          >
+            <AnalyticsResults
+              period={period}
+              date={selectedDate}
+              userId={selectedUser?.id ?? null}
+            />
+          </ClientOnly>
           {sortedLogs.length === 0 ? (
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 text-sm text-[color:var(--color-text-subtle)]">
               No activity in this range.
