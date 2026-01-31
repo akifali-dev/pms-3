@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AnalyticsResults from "@/components/analytics/AnalyticsResults";
+import ClientOnly from "@/components/ui/ClientOnly";
 import useOutsideClick from "@/hooks/useOutsideClick";
 
 const periodOptions = [
@@ -20,13 +21,17 @@ function formatDateOnly(value) {
 
 export default function AnalyticsDashboardPanel({ users, currentUser, isManager }) {
   const [period, setPeriod] = useState("daily");
-  const [selectedDate, setSelectedDate] = useState(formatDateOnly(new Date()));
+  const [selectedDate, setSelectedDate] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [userQuery, setUserQuery] = useState("");
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
   useOutsideClick(userMenuRef, () => setIsUserMenuOpen(false), isUserMenuOpen);
+
+  useEffect(() => {
+    setSelectedDate(formatDateOnly(new Date()));
+  }, []);
 
   const filteredUsers = useMemo(() => {
     const query = userQuery.toLowerCase();
@@ -125,7 +130,15 @@ export default function AnalyticsDashboardPanel({ users, currentUser, isManager 
         ) : null}
       </div>
 
-      <AnalyticsResults period={period} date={selectedDate} userId={activeUserId} />
+      <ClientOnly
+        fallback={
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 text-sm text-[color:var(--color-text-muted)]">
+            Loading analytics...
+          </div>
+        }
+      >
+        <AnalyticsResults period={period} date={selectedDate} userId={activeUserId} />
+      </ClientOnly>
     </div>
   );
 }

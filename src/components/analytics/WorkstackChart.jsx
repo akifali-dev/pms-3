@@ -49,44 +49,61 @@ function CustomTooltip({ active, payload, label }) {
         <p>Work: {formatDuration(entry.workSeconds)}</p>
         <p>Break: {formatDuration(entry.breakSeconds)}</p>
         <p>Idle: {formatDuration(entry.idleSeconds)}</p>
-        <p>First work delay: {formatDuration(entry.firstWorkDelaySeconds)}</p>
       </div>
     </div>
   );
 }
 
-export default function WorkstackChart({ dailySummaries, minWidth }) {
+export default function WorkstackChart({ perDay, minWidth }) {
   const data = useMemo(() => {
-    return (dailySummaries ?? []).map((entry) => ({
+    return (perDay ?? []).map((entry) => ({
       date: entry.date,
-      workSeconds: entry.summary.workSeconds,
-      breakSeconds: entry.summary.breakSeconds,
-      idleSeconds: entry.summary.idleSeconds,
-      firstWorkDelaySeconds: entry.summary.firstWorkStartDelaySeconds ?? 0,
+      workSeconds: entry.totals?.workSeconds ?? 0,
+      breakSeconds: entry.totals?.breakSeconds ?? 0,
+      idleSeconds: entry.totals?.idleSeconds ?? 0,
     }));
-  }, [dailySummaries]);
+  }, [perDay]);
 
   return (
     <div className="h-64 w-full overflow-x-auto">
       <div style={{ minWidth: minWidth ?? "100%", height: "100%" }}>
         <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} barSize={24} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-          <XAxis
-            dataKey="date"
-            tickFormatter={formatDayLabel}
-            tick={{ fill: "var(--color-text-muted)", fontSize: 12 }}
-          />
-          <YAxis
-            tickFormatter={(value) => formatDuration(value)}
-            tick={{ fill: "var(--color-text-muted)", fontSize: 12 }}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend />
-          <Bar dataKey="workSeconds" stackId="day" fill="var(--color-work)" name="Work" />
-          <Bar dataKey="breakSeconds" stackId="day" fill="var(--color-break)" name="Break" />
-          <Bar dataKey="idleSeconds" stackId="day" fill="var(--color-idle)" name="Idle" />
-        </BarChart>
-      </ResponsiveContainer>
+          <BarChart
+            data={data}
+            barSize={24}
+            margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
+          >
+            <XAxis
+              dataKey="date"
+              tickFormatter={formatDayLabel}
+              tick={{ fill: "var(--color-text-muted)", fontSize: 12 }}
+            />
+            <YAxis
+              tickFormatter={(value) => formatDuration(value)}
+              tick={{ fill: "var(--color-text-muted)", fontSize: 12 }}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend />
+            <Bar
+              dataKey="workSeconds"
+              stackId="day"
+              fill="var(--color-work)"
+              name="Work"
+            />
+            <Bar
+              dataKey="breakSeconds"
+              stackId="day"
+              fill="var(--color-break)"
+              name="Break"
+            />
+            <Bar
+              dataKey="idleSeconds"
+              stackId="day"
+              fill="var(--color-idle)"
+              name="Idle"
+            />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );

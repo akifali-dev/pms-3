@@ -76,7 +76,8 @@ function getWidthPercent(range, start, end) {
 export default function TimelineCard({ user, timeline }) {
   const range = useMemo(() => buildRange(timeline?.dutyWindows ?? []), [timeline]);
   const segments = timeline?.segments ?? [];
-  const summary = timeline?.summary ?? {};
+  const totals = timeline?.totals ?? {};
+  const details = timeline?.details ?? {};
   const wfhWindows = timeline?.wfhWindows ?? [];
 
   const markers = useMemo(() => {
@@ -99,7 +100,7 @@ export default function TimelineCard({ user, timeline }) {
     }));
   }, [range, wfhWindows]);
 
-  const pauseBreakdown = summary?.pauseBreakdown ?? {};
+  const pauseBreakdown = details?.pauseBreakdown ?? {};
 
   return (
     <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
@@ -125,10 +126,10 @@ export default function TimelineCard({ user, timeline }) {
             Duty
           </p>
           <p className="mt-2 text-lg font-semibold text-[color:var(--color-text)]">
-            {formatDuration(summary.totalDutySeconds)}
+            {formatDuration(totals.dutySeconds)}
           </p>
           <p className="text-xs text-[color:var(--color-text-muted)]">
-            Utilization {formatPercent(summary.utilization)}
+            Utilization {formatPercent(totals.utilization)}
           </p>
         </div>
         <div className="rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-muted-bg)] p-3">
@@ -136,10 +137,10 @@ export default function TimelineCard({ user, timeline }) {
             Work
           </p>
           <p className="mt-2 text-lg font-semibold text-[color:var(--color-text)]">
-            {formatDuration(summary.workSeconds)}
+            {formatDuration(totals.workSeconds)}
           </p>
           <p className="text-xs text-[color:var(--color-text-muted)]">
-            First work delay {formatDuration(summary.firstWorkStartDelaySeconds)}
+            First work delay {formatDuration(details.firstWorkStartDelaySeconds)}
           </p>
         </div>
         <div className="rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-muted-bg)] p-3">
@@ -147,10 +148,10 @@ export default function TimelineCard({ user, timeline }) {
             Breaks
           </p>
           <p className="mt-2 text-lg font-semibold text-[color:var(--color-text)]">
-            {formatDuration(summary.breakSeconds)}
+            {formatDuration(totals.breakSeconds)}
           </p>
           <p className="text-xs text-[color:var(--color-text-muted)]">
-            {summary.numberOfPauses ?? 0} pauses
+            {details.numberOfPauses ?? 0} pauses
           </p>
         </div>
         <div className="rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-muted-bg)] p-3">
@@ -158,10 +159,10 @@ export default function TimelineCard({ user, timeline }) {
             Idle
           </p>
           <p className="mt-2 text-lg font-semibold text-[color:var(--color-text)]">
-            {formatDuration(summary.idleSeconds)}
+            {formatDuration(totals.idleSeconds)}
           </p>
           <p className="text-xs text-[color:var(--color-text-muted)]">
-            Lost time {formatDuration(summary.lostTimeSeconds)}
+            Lost time {formatDuration(details.lostTimeSeconds)}
           </p>
         </div>
       </div>
