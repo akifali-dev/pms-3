@@ -50,6 +50,24 @@ const formatBreakReason = (reason) => {
   }
 };
 
+const getPresenceLabel = (task) => {
+  const status = task?.presenceStatusNow;
+  if (status === "IN_OFFICE") {
+    return "In office";
+  }
+  if (status === "WFH") {
+    return "WFH";
+  }
+  if (status === "OFF_DUTY") {
+    return "Off duty";
+  }
+  return task?.isWFHNow
+    ? "WFH"
+    : task?.isOnDutyNow
+      ? "In office"
+      : "Off duty";
+};
+
 const getProgressState = (task) => {
   if (task.status === "DONE") {
     return "completed";
@@ -841,13 +859,7 @@ export default function TaskBoard({
                         />
                         <span>{estimatedLabel}</span>
                         <span>{formatDurationShort(effectiveSpentSeconds)}</span>
-                        <span>
-                          {task.isWFHNow
-                            ? "WFH"
-                            : task.isOnDutyNow
-                              ? "In office"
-                              : "Off duty"}
-                        </span>
+                        <span>{getPresenceLabel(task)}</span>
                       </div>
                     </div>
                   </div>
@@ -1038,11 +1050,7 @@ export default function TaskBoard({
                       <p>
                         Status{" "}
                         <span className="font-semibold text-[color:var(--color-text)]">
-                          {selectedTask.isWFHNow
-                            ? "WFH"
-                            : selectedTask.isOnDutyNow
-                              ? "In office"
-                              : "Off duty"}
+                        {getPresenceLabel(selectedTask)}
                         </span>
                       </p>
                       {selectedTask.isOffDutyNow ? (

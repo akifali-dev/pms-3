@@ -6,8 +6,11 @@ import {
   ensureAuthenticated,
   getAuthContext,
 } from "@/lib/api";
-import { computeAttendanceDurationsForRecord } from "@/lib/dutyHours";
-import { normalizeAttendanceTimes } from "@/lib/attendanceTimes";
+import {
+  computeAttendanceDurationsForRecord,
+  getUserPresenceNow,
+} from "@/lib/dutyHours";
+import { getTimeZoneNow, normalizeAttendanceTimes } from "@/lib/attendanceTimes";
 
 function isLeader(role) {
   return PROJECT_MANAGEMENT_ROLES.includes(role);
@@ -141,6 +144,14 @@ export async function PATCH(request, { params }) {
     return buildError("In time is required.", 400);
   }
 
+  const now = getTimeZoneNow();
+  if (inTime && inTime > now) {
+    return buildError("In time cannot be in the future.", 422);
+  }
+  if (outTime && outTime > now) {
+    return buildError("Out time cannot be in the future.", 422);
+  }
+
   if (!leader && !isDateEditable(nextDate)) {
     return buildError(
       "You can only edit attendance for today and the last 2 days.",
@@ -178,6 +189,11 @@ export async function PATCH(request, { params }) {
 
     return buildSuccess("Attendance saved.", {
       attendance: attachComputedDurations(attendance),
+      presenceNow: await getUserPresenceNow(
+        prisma,
+        targetUserId,
+        getTimeZoneNow()
+      ),
     });
   } catch (error) {
     return buildError("Unable to update attendance.", 400);
