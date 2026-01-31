@@ -22,7 +22,12 @@ const getProgressColor = (remainingPercentage) => {
   return "bg-rose-500";
 };
 
-export default function MilestoneCard({ milestone, href, className = "" }) {
+export default function MilestoneCard({
+  milestone,
+  href,
+  className = "",
+  onClick,
+}) {
   const { elapsedPercentage, remainingDays, remainingPercentage } =
     getMilestoneProgress(milestone.startDate, milestone.endDate);
   const dateLabel =
@@ -66,9 +71,17 @@ export default function MilestoneCard({ milestone, href, className = "" }) {
 
   if (href) {
     return (
-      <Link href={href} className="block">
+      <Link href={href} className="block" onClick={onClick}>
         {content}
       </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button type="button" className="block w-full text-left" onClick={onClick}>
+        {content}
+      </button>
     );
   }
 

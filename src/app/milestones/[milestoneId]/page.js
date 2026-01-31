@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
 export default async function MilestoneDetailPage({ params }) {
-  const { milestoneId } = await params;
+  const { milestoneId } = params;
   const hasDatabase = Boolean(process.env.DATABASE_URL);
 
   if (!hasDatabase) {

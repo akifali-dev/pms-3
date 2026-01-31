@@ -156,6 +156,16 @@ export default function MilestonesOverview() {
     }
   };
 
+  const handleMilestoneNavigate = (milestone) => {
+    if (!milestone?.project?.id || !milestone?.id) {
+      addToast({
+        title: "Milestone link unavailable",
+        message: "This milestone is missing project details.",
+        variant: "warning",
+      });
+    }
+  };
+
   const projectOptions = useMemo(() => {
     const map = new Map();
     milestones.forEach((milestone) => {
@@ -277,6 +287,11 @@ export default function MilestonesOverview() {
                     milestone.project?.id
                       ? `/projects/${milestone.project.id}/milestones/${milestone.id}`
                       : undefined
+                  }
+                  onClick={
+                    milestone.project?.id
+                      ? undefined
+                      : () => handleMilestoneNavigate(milestone)
                   }
                 />
               ))}

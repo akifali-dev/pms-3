@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import MilestoneDetailView from "@/components/milestones/MilestoneDetailView";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -7,8 +7,8 @@ const isValidObjectId = (value) =>
   typeof value === "string" && /^[0-9a-fA-F]{24}$/.test(value);
 
 export default async function MilestoneDetailPage({ params }) {
-  const { projectId, milestoneId } = await params;
-  if (!isValidObjectId(milestoneId)) {
+  const { projectId, milestoneId } = params;
+  if (!isValidObjectId(projectId) || !isValidObjectId(milestoneId)) {
     notFound();
   }
   const session = await getSession();
@@ -26,8 +26,8 @@ export default async function MilestoneDetailPage({ params }) {
       where: { id: milestoneId },
       select: { projectId: true },
     });
-    if (milestone && milestone.projectId !== projectId) {
-      redirect(`/projects/${milestone.projectId}/milestones/${milestoneId}`);
+    if (!milestone || milestone.projectId !== projectId) {
+      notFound();
     }
   }
 

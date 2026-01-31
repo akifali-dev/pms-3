@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import ActionButton from "@/components/ui/ActionButton";
 import Modal from "@/components/ui/Modal";
@@ -20,6 +20,7 @@ const buildErrorMessage = (data) =>
   data?.error ?? data?.message ?? "Unable to load project data.";
 
 export default function ProjectDetailView({ projectId, canManageMilestones }) {
+  const router = useRouter();
   const { addToast } = useToast();
   const [project, setProject] = useState(null);
   const [milestones, setMilestones] = useState([]);
@@ -128,6 +129,18 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
     }
   };
 
+  const handleMilestoneNavigate = (milestoneId) => {
+    if (!projectId || !milestoneId) {
+      addToast({
+        title: "Milestone link unavailable",
+        message: "This milestone is missing project details.",
+        variant: "warning",
+      });
+      return;
+    }
+    router.push(`/projects/${projectId}/milestones/${milestoneId}`);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -178,7 +191,16 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
                   <MilestoneCard
                     key={milestone.id}
                     milestone={milestone}
-                    href={`/projects/${projectId}/milestones/${milestone.id}`}
+                    href={
+                      projectId && milestone.id
+                        ? `/projects/${projectId}/milestones/${milestone.id}`
+                        : undefined
+                    }
+                    onClick={
+                      projectId && milestone.id
+                        ? undefined
+                        : () => handleMilestoneNavigate(milestone.id)
+                    }
                   />
                 ))}
               </div>
