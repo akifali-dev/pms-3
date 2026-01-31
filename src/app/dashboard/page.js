@@ -1,8 +1,10 @@
 import ActionButton from "@/components/ui/ActionButton";
 import PageHeader from "@/components/layout/PageHeader";
 import PlaceholderUpload from "@/components/ui/PlaceholderUpload";
+import AnalyticsDashboardPanel from "@/components/analytics/AnalyticsDashboardPanel";
 import { getSession } from "@/lib/session";
 import { getRoleById, roles } from "@/lib/roles";
+import { prisma } from "@/lib/prisma";
 
 const metricDefinitions = [
   {
@@ -123,6 +125,24 @@ export default async function DashboardPage() {
   const role = getRoleById(session?.role);
   const roleId = role?.id ?? null;
 
+  const hasDatabase = Boolean(process.env.DATABASE_URL);
+  let currentUser = null;
+  let users = [];
+
+  if (hasDatabase && session?.email) {
+    currentUser = await prisma.user.findUnique({
+      where: { email: session.email },
+      select: { id: true, name: true, email: true, role: true },
+    });
+    if (currentUser) {
+      users = await prisma.user.findMany({
+        where: { isActive: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, email: true, role: true },
+      });
+    }
+  }
+
   const isExecutiveSummary = roleId === roles.CEO || !roleId;
   const isFullVisibility = roleId === roles.PM || roleId === roles.CTO;
   const isDeveloper = roleId === roles.DEV || roleId === roles.SENIOR_DEV;
@@ -161,6 +181,17 @@ export default async function DashboardPage() {
           />
         }
       />
+
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-[color:var(--color-text)]">
+          Working time analytics
+        </p>
+        <AnalyticsDashboardPanel
+          users={users}
+          currentUser={currentUser}
+          isManager={isFullVisibility || isExecutiveSummary}
+        />
+      </div>
 
       {isExecutiveSummary && (
         <div className="space-y-4">
