@@ -1,7 +1,7 @@
 import {
   getDutyIntervals,
   getDutyIntervalsForRange,
-  isWithinDutyWindow,
+  getPresenceFromIntervals,
   mergeIntervals,
 } from "@/lib/dutyHours";
 
@@ -195,11 +195,9 @@ export async function computeTaskSpentTime(prismaClient, taskId, userId) {
   const effectiveSpentSeconds = Math.max(0, dutyOverlapSeconds - breakSeconds);
 
   const todayIntervals = await getDutyIntervals(prismaClient, userId, now, now);
-  const isOnDutyNow = isWithinDutyWindow(todayIntervals, now);
-  const isWFHNow = todayIntervals.some(
-    (interval) =>
-      interval.source === "WFH" && isWithinDutyWindow([interval], now)
-  );
+  const presence = getPresenceFromIntervals(todayIntervals, now);
+  const isWFHNow = presence.status === "WFH";
+  const isOnDutyNow = presence.status !== "OFF_DUTY";
 
   return {
     effectiveSpentSeconds,
@@ -207,8 +205,9 @@ export async function computeTaskSpentTime(prismaClient, taskId, userId) {
     breakSeconds,
     dutyOverlapSeconds,
     lastComputedAt: now,
+    presenceStatusNow: presence.status,
     isOnDutyNow,
     isWFHNow,
-    isOffDutyNow: !isOnDutyNow,
+    isOffDutyNow: presence.status === "OFF_DUTY",
   };
 }

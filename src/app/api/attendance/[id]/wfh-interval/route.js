@@ -6,8 +6,11 @@ import {
   getAuthContext,
   PROJECT_MANAGEMENT_ROLES,
 } from "@/lib/api";
-import { computeAttendanceDurationsForRecord } from "@/lib/dutyHours";
-import { normalizeWfhInterval } from "@/lib/attendanceTimes";
+import {
+  computeAttendanceDurationsForRecord,
+  getUserPresenceNow,
+} from "@/lib/dutyHours";
+import { getTimeZoneNow, normalizeWfhInterval } from "@/lib/attendanceTimes";
 
 function isLeader(role) {
   return PROJECT_MANAGEMENT_ROLES.includes(role);
@@ -94,6 +97,14 @@ export async function POST(request, { params }) {
     return buildError("WFH end time must be after start time.", 400);
   }
 
+  const now = getTimeZoneNow();
+  if (startAt > now) {
+    return buildError("WFH start time cannot be in the future.", 422);
+  }
+  if (endAt > now) {
+    return buildError("WFH end time cannot be in the future.", 422);
+  }
+
   if (attendance.inTime && attendance.outTime) {
     const officeStart = new Date(attendance.inTime);
     const officeEnd = new Date(attendance.outTime);
@@ -146,5 +157,6 @@ export async function POST(request, { params }) {
   return buildSuccess("WFH interval added.", {
     attendance: attachComputedDurations(updatedAttendance),
     interval: created,
+    presenceNow: await getUserPresenceNow(prisma, attendance.userId, getTimeZoneNow()),
   });
 }

@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { computeAttendanceDurationsForRecord } from "@/lib/dutyHours";
-import { normalizeAttendanceTimes } from "@/lib/attendanceTimes";
+import {
+  computeAttendanceDurationsForRecord,
+  getUserPresenceNow,
+} from "@/lib/dutyHours";
+import { getTimeZoneNow, normalizeAttendanceTimes } from "@/lib/attendanceTimes";
 import {
   PROJECT_MANAGEMENT_ROLES,
   buildError,
@@ -131,8 +134,14 @@ export async function GET(request) {
     },
   });
 
+  const presenceUserId = requestedUserId ?? context.user.id;
+  const presenceNow = presenceUserId
+    ? await getUserPresenceNow(prisma, presenceUserId, getTimeZoneNow())
+    : null;
+
   return buildSuccess("Attendance loaded.", {
     attendance: attendance.map((record) => attachComputedDurations(record)),
+    presenceNow,
   });
 }
 
@@ -170,6 +179,14 @@ export async function POST(request) {
 
   if (body?.outTime && !outTime) {
     return buildError("Out time must be valid.", 400);
+  }
+
+  const now = getTimeZoneNow();
+  if (inTime && inTime > now) {
+    return buildError("In time cannot be in the future.", 422);
+  }
+  if (outTime && outTime > now) {
+    return buildError("Out time cannot be in the future.", 422);
   }
 
   if (leader && body?.userId) {
@@ -213,5 +230,6 @@ export async function POST(request) {
 
   return buildSuccess("Attendance saved.", {
     attendance: attachComputedDurations(attendance),
+    presenceNow: await getUserPresenceNow(prisma, targetUserId, getTimeZoneNow()),
   });
 }

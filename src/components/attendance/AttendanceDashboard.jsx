@@ -166,6 +166,17 @@ function getPresetRange(preset) {
   };
 }
 
+function formatPresenceLabel(presence) {
+  const status = presence?.status;
+  if (status === "IN_OFFICE") {
+    return "In office";
+  }
+  if (status === "WFH") {
+    return "WFH";
+  }
+  return "Off duty";
+}
+
 function combineDateTime(dateValue, timeValue) {
   if (!dateValue || !timeValue) {
     return null;
@@ -231,6 +242,7 @@ const AttendanceMenu = ({ onEdit, disabled, tooltip }) => {
 
 export default function AttendanceDashboard({
   initialAttendance,
+  initialPresenceNow,
   users,
   currentUser,
   isLeader,
@@ -238,6 +250,7 @@ export default function AttendanceDashboard({
 }) {
   const { addToast } = useToast();
   const [attendance, setAttendance] = useState(initialAttendance ?? []);
+  const [presenceNow, setPresenceNow] = useState(initialPresenceNow ?? null);
   const [status, setStatus] = useState({ loading: false, error: null });
   const [activeBadge, setActiveBadge] = useState("all");
   const [activePreset, setActivePreset] = useState(initialRange?.preset ?? "week");
@@ -316,6 +329,15 @@ export default function AttendanceDashboard({
     return attendance;
   }, [activeBadge, attendance]);
 
+  const notifyAttendanceUpdated = (userId) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent("attendance-updated", { detail: { userId } })
+    );
+  };
+
   const fetchAttendance = async ({ targetUserId } = {}) => {
     setStatus({ loading: true, error: null });
     try {
@@ -335,6 +357,7 @@ export default function AttendanceDashboard({
         throw new Error(data?.message ?? "Unable to load attendance.");
       }
       setAttendance(data?.attendance ?? []);
+      setPresenceNow(data?.presenceNow ?? null);
       setStatus({ loading: false, error: null });
     } catch (error) {
       const message =
@@ -465,11 +488,15 @@ export default function AttendanceDashboard({
       if (data?.attendance) {
         setActiveRecord(data.attendance);
         setWfhIntervals(data.attendance.wfhIntervals ?? []);
+        if (data?.presenceNow) {
+          setPresenceNow(data.presenceNow);
+        }
         setAttendance((prev) =>
           prev.map((record) =>
             record.id === data.attendance.id ? data.attendance : record
           )
         );
+        notifyAttendanceUpdated(data.attendance.userId ?? currentUser?.id);
       } else {
         fetchAttendance({ targetUserId: selectedUser?.id ?? "" });
       }
@@ -522,7 +549,11 @@ export default function AttendanceDashboard({
         variant: "success",
       });
       closeModal();
+      if (data?.presenceNow) {
+        setPresenceNow(data.presenceNow);
+      }
       fetchAttendance({ targetUserId: selectedUser?.id ?? "" });
+      notifyAttendanceUpdated(data?.attendance?.userId ?? currentUser?.id);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to save attendance.";
@@ -599,6 +630,12 @@ export default function AttendanceDashboard({
                 className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-1 text-xs font-semibold text-[color:var(--color-text)]"
               />
             </label>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] px-3 py-1 text-xs font-semibold text-[color:var(--color-text-muted)]">
+            <span>Presence</span>
+            <span className="text-[color:var(--color-text)]">
+              {formatPresenceLabel(presenceNow)}
+            </span>
           </div>
         </div>
 

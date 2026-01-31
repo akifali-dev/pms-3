@@ -2,7 +2,11 @@ import AttendanceDashboard from "@/components/attendance/AttendanceDashboard";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { normalizeRole, PROJECT_MANAGEMENT_ROLES } from "@/lib/api";
-import { computeAttendanceDurationsForRecord } from "@/lib/dutyHours";
+import {
+  computeAttendanceDurationsForRecord,
+  getUserPresenceNow,
+} from "@/lib/dutyHours";
+import { getTimeZoneNow } from "@/lib/attendanceTimes";
 
 function getWeekRange() {
   const now = new Date();
@@ -26,6 +30,7 @@ export default async function AttendancePage() {
   let currentUser = null;
   let users = [];
   let attendance = [];
+  let presenceNow = null;
 
   const { start, end } = getWeekRange();
 
@@ -69,12 +74,19 @@ export default async function AttendancePage() {
           dutyHHMM: computed.dutyHHMM,
         };
       });
+
+      presenceNow = await getUserPresenceNow(
+        prisma,
+        currentUser.id,
+        getTimeZoneNow()
+      );
     }
   }
 
   return (
     <AttendanceDashboard
       initialAttendance={attendance}
+      initialPresenceNow={presenceNow}
       users={users}
       currentUser={currentUser}
       isLeader={isLeader}

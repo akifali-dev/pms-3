@@ -95,3 +95,40 @@ export function normalizeWfhInterval({ shiftDate, startTime, endTime }) {
   }
   return { startAt, endAt };
 }
+
+export const DEFAULT_TIME_ZONE = "Asia/Karachi";
+
+function getTimeZoneParts(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const lookup = parts.reduce((acc, part) => {
+    if (part.type !== "literal") {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
+  if (!lookup.year || !lookup.month || !lookup.day) {
+    return null;
+  }
+  return lookup;
+}
+
+export function getTimeZoneNow(timeZone = DEFAULT_TIME_ZONE) {
+  const now = new Date();
+  const parts = getTimeZoneParts(now, timeZone);
+  if (!parts) {
+    return now;
+  }
+  return new Date(
+    `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`
+  );
+}
