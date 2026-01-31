@@ -70,10 +70,7 @@ export async function POST(request, { params }) {
   }
 
   if (!attendance.inTime || !attendance.outTime) {
-    return buildError(
-      "Add WFH time only after in time and out time are recorded.",
-      400
-    );
+    return buildError("Add out time to enable WFH.", 400);
   }
 
   const today = normalizeDateOnly(new Date());
