@@ -7,7 +7,7 @@ const isValidObjectId = (value) =>
   typeof value === "string" && /^[0-9a-fA-F]{24}$/.test(value);
 
 export default async function MilestoneDetailPage({ params }) {
-  const { projectId, milestoneId } = params;
+  const { projectId, milestoneId } = await params;
   if (!isValidObjectId(projectId) || !isValidObjectId(milestoneId)) {
     notFound();
   }
