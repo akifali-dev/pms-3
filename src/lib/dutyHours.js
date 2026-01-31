@@ -175,6 +175,39 @@ export function findDutyWindowForTime(windows, time) {
   return windows.find((window) => now >= window.start && now <= window.end) ?? null;
 }
 
+export function getPresenceFromIntervals(intervals, now = new Date()) {
+  if (!Array.isArray(intervals)) {
+    return { status: "OFF_DUTY", dutyWindowInfo: null };
+  }
+  const officeIntervals = intervals.filter(
+    (interval) => interval?.source === "ATTENDANCE"
+  );
+  const officeWindow = findDutyWindowForTime(officeIntervals, now);
+  if (officeWindow) {
+    return {
+      status: "IN_OFFICE",
+      dutyWindowInfo: { inAt: officeWindow.start, outAt: officeWindow.end },
+    };
+  }
+  const wfhIntervals = intervals.filter((interval) => interval?.source === "WFH");
+  const wfhWindow = findDutyWindowForTime(wfhIntervals, now);
+  if (wfhWindow) {
+    return {
+      status: "WFH",
+      dutyWindowInfo: { startAt: wfhWindow.start, endAt: wfhWindow.end },
+    };
+  }
+  return { status: "OFF_DUTY", dutyWindowInfo: null };
+}
+
+export async function getUserPresenceNow(prismaClient, userId, now = new Date()) {
+  if (!prismaClient || !userId) {
+    return { status: "OFF_DUTY", dutyWindowInfo: null };
+  }
+  const intervals = await getDutyIntervals(prismaClient, userId, now, now);
+  return getPresenceFromIntervals(intervals, now);
+}
+
 export async function getDutyIntervals(prismaClient, userId, date, now = new Date()) {
   const bounds = getDayBounds(date);
   if (!bounds || !userId) {

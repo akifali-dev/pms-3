@@ -80,6 +80,19 @@ export default function MilestoneDetailView({
   }, [loadMilestone]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    const handleAttendanceUpdate = () => {
+      loadMilestone();
+    };
+    window.addEventListener("attendance-updated", handleAttendanceUpdate);
+    return () => {
+      window.removeEventListener("attendance-updated", handleAttendanceUpdate);
+    };
+  }, [loadMilestone]);
+
+  useEffect(() => {
     if (!canManageAssignments) {
       return;
     }

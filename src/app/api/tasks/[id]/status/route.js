@@ -271,6 +271,7 @@ export async function PATCH(request, { params }) {
       dutyOverlapSeconds: computed.dutyOverlapSeconds,
       rawWorkSeconds: computed.rawWorkSeconds,
       lastComputedAt: computed.lastComputedAt,
+      presenceStatusNow: computed.presenceStatusNow,
       isOnDutyNow: computed.isOnDutyNow,
       isWFHNow: computed.isWFHNow,
       isOffDutyNow: computed.isOffDutyNow,
