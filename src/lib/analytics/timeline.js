@@ -242,8 +242,8 @@ function buildSegments({
   return segments.sort((a, b) => a.startAt - b.startAt);
 }
 
-function summarizeSegments({ dutyWindows, segments, breakIntervals }) {
-  const totalDutySeconds = sumIntervalsSeconds(dutyWindows);
+function calculateTotals({ dutyWindows, segments, breakIntervals, wfhIntervals }) {
+  const dutySeconds = sumIntervalsSeconds(dutyWindows);
   const workSeconds = sumIntervalsSeconds(
     segments.filter((segment) => segment.type === "WORK").map((segment) => ({
       start: segment.startAt,
@@ -255,10 +255,26 @@ function summarizeSegments({ dutyWindows, segments, breakIntervals }) {
       breakIntervals.map((interval) => ({ start: interval.start, end: interval.end }))
     )
   );
-  const idleSeconds = Math.max(0, totalDutySeconds - workSeconds - breakSeconds);
+  const idleSeconds = Math.max(0, dutySeconds - workSeconds - breakSeconds);
+  const wfhSeconds = sumIntervalsSeconds(
+    mergeSimpleIntervals(
+      (wfhIntervals ?? []).map((interval) => ({ start: interval.start, end: interval.end }))
+    )
+  );
   const utilization =
-    totalDutySeconds > 0 ? Number((workSeconds / totalDutySeconds).toFixed(3)) : 0;
-  const lostTimeSeconds = idleSeconds + breakSeconds;
+    dutySeconds > 0 ? Number((workSeconds / dutySeconds).toFixed(3)) : 0;
+  return {
+    dutySeconds,
+    workSeconds,
+    breakSeconds,
+    idleSeconds,
+    wfhSeconds,
+    utilization,
+  };
+}
+
+function buildTimelineDetails({ dutyWindows, segments, breakIntervals, totals }) {
+  const lostTimeSeconds = (totals?.idleSeconds ?? 0) + (totals?.breakSeconds ?? 0);
   const dutyStart = dutyWindows[0]?.start ?? null;
   const firstWork = segments.find((segment) => segment.type === "WORK") ?? null;
   const firstWorkStartDelaySeconds =
@@ -283,11 +299,6 @@ function summarizeSegments({ dutyWindows, segments, breakIntervals }) {
   }, {});
 
   return {
-    totalDutySeconds,
-    workSeconds,
-    breakSeconds,
-    idleSeconds,
-    utilization,
     lostTimeSeconds,
     numberOfPauses: breakIntervals.length,
     pauseBreakdown,
@@ -297,9 +308,21 @@ function summarizeSegments({ dutyWindows, segments, breakIntervals }) {
 
 export async function getUserDailyTimeline(prismaClient, userId, date, now = new Date()) {
   if (!prismaClient || !userId) {
+    const totals = calculateTotals({
+      dutyWindows: [],
+      segments: [],
+      breakIntervals: [],
+      wfhIntervals: [],
+    });
     return {
       segments: [],
-      summary: summarizeSegments({ dutyWindows: [], segments: [], breakIntervals: [] }),
+      totals,
+      details: buildTimelineDetails({
+        dutyWindows: [],
+        segments: [],
+        breakIntervals: [],
+        totals,
+      }),
       dutyWindows: [],
       wfhWindows: [],
       message: "No attendance recorded.",
@@ -307,9 +330,21 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
   }
   const bounds = getDayBounds(date);
   if (!bounds) {
+    const totals = calculateTotals({
+      dutyWindows: [],
+      segments: [],
+      breakIntervals: [],
+      wfhIntervals: [],
+    });
     return {
       segments: [],
-      summary: summarizeSegments({ dutyWindows: [], segments: [], breakIntervals: [] }),
+      totals,
+      details: buildTimelineDetails({
+        dutyWindows: [],
+        segments: [],
+        breakIntervals: [],
+        totals,
+      }),
       dutyWindows: [],
       wfhWindows: [],
       message: "Invalid date.",
@@ -340,9 +375,21 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
 
   const dutyWindows = mergeIntervals(dutyIntervals);
   if (dutyWindows.length === 0) {
+    const totals = calculateTotals({
+      dutyWindows: [],
+      segments: [],
+      breakIntervals: [],
+      wfhIntervals: [],
+    });
     return {
       segments: [],
-      summary: summarizeSegments({ dutyWindows: [], segments: [], breakIntervals: [] }),
+      totals,
+      details: buildTimelineDetails({
+        dutyWindows: [],
+        segments: [],
+        breakIntervals: [],
+        totals,
+      }),
       dutyWindows: [],
       wfhWindows: wfhIntervals,
       message: "No attendance recorded.",
@@ -414,15 +461,23 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
     wfhIntervals,
   });
 
-  const summary = summarizeSegments({
+  const totals = calculateTotals({
     dutyWindows,
     segments,
     breakIntervals,
+    wfhIntervals,
+  });
+  const details = buildTimelineDetails({
+    dutyWindows,
+    segments,
+    breakIntervals,
+    totals,
   });
 
   return {
     segments,
-    summary,
+    totals,
+    details,
     dutyWindows,
     wfhWindows: wfhIntervals,
     message: segments.length === 0 ? "No activity recorded." : null,
