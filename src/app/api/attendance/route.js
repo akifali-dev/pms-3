@@ -160,20 +160,16 @@ export async function POST(request) {
   const inTime = inAt ?? (body?.inTime ? parseDateTime(body?.inTime) : null);
   const outTime = outAt ?? (body?.outTime ? parseDateTime(body?.outTime) : null);
 
+  if (!body?.inTime) {
+    return buildError("In time is required.", 400);
+  }
+
   if (body?.inTime && !inTime) {
     return buildError("In time must be valid.", 400);
   }
 
   if (body?.outTime && !outTime) {
     return buildError("Out time must be valid.", 400);
-  }
-
-  if (!inTime || !outTime) {
-    return buildError("In time and out time are required.", 400);
-  }
-
-  if (inTime && outTime && outTime <= inTime) {
-    return buildError("Out time must be after in time.", 400);
   }
 
   if (leader && body?.userId) {

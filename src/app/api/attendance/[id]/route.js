@@ -125,6 +125,10 @@ export async function PATCH(request, { params }) {
     normalized.outAt ??
     (body?.outTime !== undefined ? parseDateTime(body.outTime) : existing.outTime);
 
+  if (body?.inTime !== undefined && !body?.inTime) {
+    return buildError("In time is required.", 400);
+  }
+
   if (body?.inTime !== undefined && body?.inTime && !inTime) {
     return buildError("In time must be valid.", 400);
   }
@@ -133,12 +137,8 @@ export async function PATCH(request, { params }) {
     return buildError("Out time must be valid.", 400);
   }
 
-  if (!inTime || !outTime) {
-    return buildError("In time and out time are required.", 400);
-  }
-
-  if (inTime && outTime && outTime <= inTime) {
-    return buildError("Out time must be after in time.", 400);
+  if (!inTime) {
+    return buildError("In time is required.", 400);
   }
 
   if (!leader && !isDateEditable(nextDate)) {
