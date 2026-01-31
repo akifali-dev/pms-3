@@ -76,6 +76,9 @@ function getRecordDurations(record) {
   if (!record) {
     return { office: "-", wfh: "-", total: "-" };
   }
+  if (record.inTime && !record.outTime) {
+    return { office: "Shift running", wfh: "-", total: "-" };
+  }
   if (record.officeHHMM || record.wfhHHMM || record.dutyHHMM) {
     return {
       office: record.officeHHMM ?? "-",
@@ -407,6 +410,19 @@ export default function AttendanceDashboard({
     activeRecord.inTime &&
     activeRecord.outTime;
 
+  const wfhHelperText = useMemo(() => {
+    if (!activeRecord || modalState.mode !== "edit") {
+      return "Save attendance to add WFH intervals.";
+    }
+    if (!isTodayDate(activeRecord.date)) {
+      return "WFH intervals can only be added for today.";
+    }
+    if (!activeRecord.outTime) {
+      return "Add out time to enable WFH.";
+    }
+    return "Add intervals for today.";
+  }, [activeRecord, modalState.mode]);
+
   const handleWfhChange = (event) => {
     const { name, value } = event.target;
     setWfhForm((prev) => ({ ...prev, [name]: value }));
@@ -702,7 +718,16 @@ export default function AttendanceDashboard({
                     {record.inTime ? formatDisplayTime(record.inTime) : "-"}
                   </td>
                   <td className="px-4 py-4 text-[color:var(--color-text)]">
-                    {record.outTime ? formatDisplayTime(record.outTime) : "-"}
+                    {record.outTime ? (
+                      formatDisplayTime(record.outTime)
+                    ) : record.inTime ? (
+                      <div className="space-y-1 text-[color:var(--color-text-subtle)]">
+                        <p>Out time not added yet</p>
+                        <p className="text-[11px]">In recorded, waiting for out time</p>
+                      </div>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td className="px-4 py-4 text-[color:var(--color-text)]">
                     {durations.office}
@@ -831,15 +856,14 @@ export default function AttendanceDashboard({
               </label>
               <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
                 Out time
-                <input
-                  type="time"
-                  name="outTime"
-                  value={form.outTime}
-                  onChange={handleFormChange}
-                  required
-                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
-                />
-              </label>
+                  <input
+                    type="time"
+                    name="outTime"
+                    value={form.outTime}
+                    onChange={handleFormChange}
+                    className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                  />
+                </label>
             </div>
             <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
               Note
@@ -858,9 +882,7 @@ export default function AttendanceDashboard({
                   Work From Home
                 </p>
                 <span className="text-[11px] text-[color:var(--color-text-subtle)]">
-                  {canAddWfh
-                    ? "Add intervals for today"
-                    : "Available after in/out time for today"}
+                  {wfhHelperText}
                 </span>
               </div>
               {wfhIntervals.length ? (
