@@ -16,7 +16,19 @@ import {
 async function getTask(taskId) {
   return prisma.task.findUnique({
     where: { id: taskId },
-    include: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      status: true,
+      type: true,
+      ownerId: true,
+      milestoneId: true,
+      estimatedHours: true,
+      reworkCount: true,
+      totalTimeSpent: true,
+      lastStartedAt: true,
+      createdAt: true,
       owner: { select: { id: true, name: true, email: true, role: true } },
       milestone: {
         select: {
@@ -162,7 +174,7 @@ export async function PATCH(request, { params }) {
 
       const currentTask = await tx.task.findUnique({
         where: { id: taskId },
-        include: {
+        select: {
           timeLogs: true,
         },
       });
