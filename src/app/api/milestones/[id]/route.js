@@ -10,6 +10,7 @@ import {
   isAdminRole,
   isManagementRole,
 } from "@/lib/api";
+import { ensureTaskUpdatedAt } from "@/lib/taskDataFixes";
 
 async function getMilestone(milestoneId) {
   return prisma.milestone.findUnique({
@@ -148,6 +149,8 @@ export async function DELETE(request, { params }) {
   }
 
   try {
+    await ensureTaskUpdatedAt(prisma, { milestoneId });
+
     const tasks = await prisma.task.findMany({
       where: { milestoneId },
       select: { id: true },
