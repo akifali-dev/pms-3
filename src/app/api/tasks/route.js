@@ -218,9 +218,9 @@ export async function POST(request) {
     resolvedOwnerId = context.user.id;
   }
 
-  const task = await prisma.$transaction(async (tx) => {
+  const createdTask = await prisma.$transaction(async (tx) => {
     const now = new Date();
-    const createdTask = await tx.task.create({
+    const task = await tx.task.create({
       data: {
         title,
         description,
@@ -250,7 +250,7 @@ export async function POST(request) {
     if (checklistLabels.length > 0) {
       await tx.checklistItem.createMany({
         data: checklistLabels.map((label) => ({
-          taskId: createdTask.id,
+          taskId: task.id,
           label,
         })),
       });
@@ -258,7 +258,7 @@ export async function POST(request) {
 
     await tx.taskStatusHistory.create({
       data: {
-        taskId: createdTask.id,
+        taskId: task.id,
         fromStatus: null,
         toStatus: status,
         changedById: context.user.id,
@@ -268,7 +268,7 @@ export async function POST(request) {
     if (status === "IN_PROGRESS") {
       await tx.taskTimeLog.create({
         data: {
-          taskId: createdTask.id,
+          taskId: task.id,
           status,
           startedAt: now,
         },
@@ -277,62 +277,63 @@ export async function POST(request) {
 
     await tx.activityLog.create({
       data: {
-        userId: createdTask.ownerId,
-        taskId: createdTask.id,
+        userId: task.ownerId,
+        taskId: task.id,
         category: "TASK",
         hoursSpent: 0,
-        description: `Task created: ${createdTask.title} (${status}).`,
+        description: `Task created: ${task.title} (${status}).`,
       },
     });
 
-    const memberIds = await getProjectMemberIds(
-      createdTask.milestone?.projectId,
-      tx
-    );
+    return task;
+  });
+
+  const memberIds = await getProjectMemberIds(createdTask.milestone?.projectId);
+  await createNotification({
+    type: "CREATION_ASSIGNMENT",
+    actorId: context.user.id,
+    message: `${context.user?.name || context.user?.email || "A teammate"} created task ${createdTask.title}.`,
+    taskId: createdTask.id,
+    projectId: createdTask.milestone?.projectId ?? null,
+    milestoneId: createdTask.milestone?.id ?? null,
+    recipientIds: memberIds.length ? memberIds : [createdTask.ownerId],
+  });
+
+  if (
+    ["PM", "CTO"].includes(context.role) &&
+    createdTask.ownerId &&
+    createdTask.ownerId !== context.user.id
+  ) {
     await createNotification({
-      prismaClient: tx,
-      type: "CREATION_ASSIGNMENT",
+      type: "TASK_ASSIGNED",
       actorId: context.user.id,
-      message: `${context.user?.name || context.user?.email || "A teammate"} created task ${createdTask.title}.`,
+      message: `${context.user?.name || context.user?.email || "A leader"} assigned you task ${createdTask.title}.`,
       taskId: createdTask.id,
       projectId: createdTask.milestone?.projectId ?? null,
       milestoneId: createdTask.milestone?.id ?? null,
-      recipientIds: memberIds.length ? memberIds : [createdTask.ownerId],
+      recipientIds: [createdTask.ownerId],
     });
+  }
 
-    if (
-      ["PM", "CTO"].includes(context.role) &&
-      createdTask.ownerId &&
-      createdTask.ownerId !== context.user.id
-    ) {
-      await createNotification({
-        prismaClient: tx,
-        type: "TASK_ASSIGNED",
-        actorId: context.user.id,
-        message: `${context.user?.name || context.user?.email || "A leader"} assigned you task ${createdTask.title}.`,
-        taskId: createdTask.id,
-        projectId: createdTask.milestone?.projectId ?? null,
-        milestoneId: createdTask.milestone?.id ?? null,
-        recipientIds: [createdTask.ownerId],
-      });
-    }
-
-    return tx.task.findUnique({
-      where: { id: createdTask.id },
-      include: {
-        owner: { select: { id: true, name: true, email: true, role: true } },
-        milestone: {
-          select: { id: true, title: true, projectId: true },
-        },
-        checklistItems: true,
-        statusHistory: true,
-        activityLogs: true,
-        timeLogs: true,
-        workSessions: { orderBy: { startedAt: "desc" } },
-        breaks: { orderBy: { startedAt: "desc" } },
+  const task = await prisma.task.findUnique({
+    where: { id: createdTask.id },
+    include: {
+      owner: { select: { id: true, name: true, email: true, role: true } },
+      milestone: {
+        select: { id: true, title: true, projectId: true },
       },
-    });
+      checklistItems: true,
+      statusHistory: true,
+      activityLogs: true,
+      timeLogs: true,
+      workSessions: { orderBy: { startedAt: "desc" } },
+      breaks: { orderBy: { startedAt: "desc" } },
+    },
   });
+
+  if (!task) {
+    return buildError("Task not found after creation.", 500);
+  }
 
   const computed = await computeTaskSpentTime(prisma, task.id, task.ownerId);
 
