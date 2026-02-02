@@ -533,9 +533,11 @@ export default function TaskBoard({
     if (!refreshedTask) {
       updateTaskState(task.id, (item) => ({
         ...item,
-        breaks: (item.breaks ?? []).map((brk) =>
-          brk.id === data.break.id ? data.break : brk
-        ),
+        breaks: data.break
+          ? (item.breaks ?? []).map((brk) =>
+              brk.id === data.break.id ? data.break : brk
+            )
+          : item.breaks ?? [],
         activeBreak: null,
       }));
     }

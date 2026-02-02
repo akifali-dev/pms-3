@@ -54,12 +54,12 @@ export async function POST(request, { params }) {
   });
 
   if (!activeBreaks.length) {
-    console.warn("No active break found for task resume.", {
+    console.info("No active break found for task resume.", {
       taskId,
       userId: context.user.id,
       filters: { taskId, userId: context.user.id, endedAt: null },
     });
-    return buildError("No active break found for this task.", 404);
+    return buildSuccess("No active break found for this task.", { break: null });
   }
 
   const now = new Date();
