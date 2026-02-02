@@ -89,18 +89,21 @@ export default function WorkstackChart({ perDay, minWidth }) {
               stackId="day"
               fill="var(--color-work)"
               name="Work"
+              radius={0}
             />
             <Bar
               dataKey="breakSeconds"
               stackId="day"
               fill="var(--color-break)"
               name="Break"
+              radius={0}
             />
             <Bar
               dataKey="idleSeconds"
               stackId="day"
               fill="var(--color-idle)"
               name="Idle"
+              radius={0}
             />
           </BarChart>
         </ResponsiveContainer>
