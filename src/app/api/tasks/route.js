@@ -13,6 +13,7 @@ import { TASK_STATUSES } from "@/lib/kanban";
 import { getChecklistForTaskType } from "@/lib/taskChecklists";
 import { computeTaskSpentTime } from "@/lib/taskTimeCalculator";
 import { createNotification, getProjectMemberIds } from "@/lib/notifications";
+import { ensureTaskUpdatedAt } from "@/lib/taskDataFixes";
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -63,6 +64,8 @@ export async function GET(request) {
   if (ownerId) {
     where.ownerId = ownerId;
   }
+
+  await ensureTaskUpdatedAt(prisma, where);
 
   const tasks = await prisma.task.findMany({
     where,

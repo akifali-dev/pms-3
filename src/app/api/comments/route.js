@@ -7,6 +7,7 @@ import {
   isAdminRole,
 } from "@/lib/api";
 import { createNotification, getTaskMemberIds } from "@/lib/notifications";
+import { ensureTaskUpdatedAt } from "@/lib/taskDataFixes";
 
 const normalizeEntityType = (value) => value?.toString().trim().toUpperCase();
 
@@ -14,6 +15,11 @@ const isValidEntityType = (entityType) =>
   ["TASK", "MANUAL_LOG"].includes(entityType);
 
 async function getAccessibleTaskIds(context, ids) {
+  await ensureTaskUpdatedAt(
+    prisma,
+    ids?.length ? { id: { in: ids } } : {}
+  );
+
   const tasks = await prisma.task.findMany({
     where: {
       ...(ids?.length ? { id: { in: ids } } : {}),
