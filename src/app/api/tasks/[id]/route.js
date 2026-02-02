@@ -81,7 +81,10 @@ export async function GET(request, { params }) {
       isOnDutyNow: computed.isOnDutyNow,
       isWFHNow: computed.isWFHNow,
       isOffDutyNow: computed.isOffDutyNow,
-      activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
+      activeBreak:
+        task.breaks?.find(
+          (brk) => !brk.endedAt && brk.userId === task.ownerId
+        ) ?? null,
     },
   });
 }

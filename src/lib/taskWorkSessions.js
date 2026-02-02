@@ -38,7 +38,11 @@ export async function endWorkSession({
   let breakSeconds = 0;
   if (includeBreaks) {
     const activeBreaks = await prismaClient.taskBreak.findMany({
-      where: { taskId: session.taskId, endedAt: null },
+      where: {
+        taskId: session.taskId,
+        userId: session.userId,
+        endedAt: null,
+      },
     });
 
     const endedBreaks = await Promise.all(
@@ -63,6 +67,7 @@ export async function endWorkSession({
     const breaksInSession = await prismaClient.taskBreak.findMany({
       where: {
         taskId: session.taskId,
+        userId: session.userId,
         startedAt: { gte: startTime, lte: endTime },
         endedAt: { not: null },
       },

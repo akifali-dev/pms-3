@@ -4,6 +4,7 @@ import {
   buildSuccess,
   ensureAuthenticated,
   getAuthContext,
+  isManagementRole,
 } from "@/lib/api";
 
 async function getTask(taskId) {
@@ -18,6 +19,9 @@ async function getTask(taskId) {
 
 function canManageBreak(context, task) {
   if (!task) {
+    return false;
+  }
+  if (isManagementRole(context.role)) {
     return false;
   }
   return task.ownerId === context.user.id;
@@ -44,24 +48,44 @@ export async function POST(request, { params }) {
     return buildError("You do not have permission to manage breaks.", 403);
   }
 
-  const activeBreak = await prisma.taskBreak.findFirst({
-    where: { taskId, endedAt: null },
+  const activeBreaks = await prisma.taskBreak.findMany({
+    where: { taskId, userId: context.user.id, endedAt: null },
+    orderBy: { startedAt: "desc" },
   });
 
-  if (!activeBreak) {
-    return buildError("No active break found for this task.", 400);
+  if (!activeBreaks.length) {
+    console.warn("No active break found for task resume.", {
+      taskId,
+      userId: context.user.id,
+      filters: { taskId, userId: context.user.id, endedAt: null },
+    });
+    return buildError("No active break found for this task.", 404);
   }
 
   const now = new Date();
-  const durationSeconds = Math.max(
-    0,
-    Math.floor((now.getTime() - new Date(activeBreak.startedAt).getTime()) / 1000)
+  if (activeBreaks.length > 1) {
+    console.warn("Multiple active breaks detected; closing all.", {
+      taskId,
+      userId: context.user.id,
+      count: activeBreaks.length,
+    });
+  }
+
+  const updatedBreaks = await prisma.$transaction(
+    activeBreaks.map((brk) => {
+      const startedAt = new Date(brk.startedAt);
+      const durationSeconds = Math.max(
+        0,
+        Math.floor((now.getTime() - startedAt.getTime()) / 1000)
+      );
+      return prisma.taskBreak.update({
+        where: { id: brk.id },
+        data: { endedAt: now, durationSeconds },
+      });
+    })
   );
 
-  const updatedBreak = await prisma.taskBreak.update({
-    where: { id: activeBreak.id },
-    data: { endedAt: now, durationSeconds },
-  });
+  const updatedBreak = updatedBreaks[0];
 
   return buildSuccess("Break ended.", { break: updatedBreak });
 }
