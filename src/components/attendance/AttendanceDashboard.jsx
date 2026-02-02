@@ -6,6 +6,7 @@ import Modal from "@/components/ui/Modal";
 import PageHeader from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/ToastProvider";
 import useOutsideClick from "@/hooks/useOutsideClick";
+import { getCutoffTime } from "@/lib/dutyHours";
 
 const badgeOptions = [
   { id: "all", label: "All" },
@@ -16,6 +17,14 @@ const presetOptions = [
   { id: "today", label: "Today" },
   { id: "week", label: "This Week" },
   { id: "month", label: "This Month" },
+];
+
+const breakTypeOptions = [
+  { id: "LUNCH", label: "Lunch" },
+  { id: "DINNER", label: "Dinner" },
+  { id: "NAMAZ", label: "Namaz" },
+  { id: "REFRESHMENT", label: "Refreshment" },
+  { id: "OTHER", label: "Other" },
 ];
 
 function formatDateForInput(value) {
@@ -70,6 +79,22 @@ function formatDurationFromSeconds(seconds) {
     return `${hours}h`;
   }
   return `${minutes}m`;
+}
+
+function formatDurationFromMinutes(minutes) {
+  const totalMinutes = Number(minutes);
+  if (!totalMinutes || totalMinutes <= 0) {
+    return "-";
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const remaining = totalMinutes % 60;
+  if (hours && remaining) {
+    return `${hours}h ${remaining}m`;
+  }
+  if (hours) {
+    return `${hours}h`;
+  }
+  return `${remaining}m`;
 }
 
 function getRecordDurations(record) {
@@ -145,6 +170,21 @@ function isEditableAttendanceDate(value) {
   return target >= earliest && target <= startOfToday;
 }
 
+function isAttendanceRunning(attendance, now = new Date()) {
+  if (!attendance?.inTime || attendance.outTime) {
+    return false;
+  }
+  const start = new Date(attendance.inTime);
+  if (Number.isNaN(start.getTime())) {
+    return false;
+  }
+  const cutoff = getCutoffTime(start);
+  if (!cutoff) {
+    return false;
+  }
+  return now >= start && now <= cutoff;
+}
+
 function getPresetRange(preset) {
   const now = new Date();
   const start = new Date(now);
@@ -175,6 +215,11 @@ function formatPresenceLabel(presence) {
     return "WFH";
   }
   return "Off duty";
+}
+
+function formatBreakType(value) {
+  const option = breakTypeOptions.find((item) => item.id === value);
+  return option?.label ?? "Other";
 }
 
 function combineDateTime(dateValue, timeValue) {
@@ -240,6 +285,69 @@ const AttendanceMenu = ({ onEdit, disabled, tooltip }) => {
   );
 };
 
+const BreakMenu = ({ onEdit, onDelete, disabled, tooltip }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useOutsideClick(menuRef, () => setIsOpen(false), isOpen);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          if (disabled) {
+            return;
+          }
+          setIsOpen((prev) => !prev);
+        }}
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] transition ${
+          disabled
+            ? "cursor-not-allowed opacity-60"
+            : "hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)]"
+        }`}
+        aria-label="Break actions"
+        title={disabled ? tooltip : "Break actions"}
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        disabled={disabled}
+      >
+        <span className="text-lg leading-none">⋮</span>
+      </button>
+      {isOpen ? (
+        <div
+          className="absolute right-0 z-10 mt-2 w-40 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-xs text-[color:var(--color-text)] shadow-xl"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsOpen(false);
+              onEdit();
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsOpen(false);
+              onDelete();
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-rose-300 hover:bg-rose-500/10"
+          >
+            Delete
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 export default function AttendanceDashboard({
   initialAttendance,
   initialPresenceNow,
@@ -277,6 +385,19 @@ export default function AttendanceDashboard({
   const [wfhIntervals, setWfhIntervals] = useState([]);
   const [wfhForm, setWfhForm] = useState({ startTime: "", endTime: "" });
   const [wfhSubmitting, setWfhSubmitting] = useState(false);
+  const [breakModal, setBreakModal] = useState({
+    open: false,
+    mode: "create",
+    breakItem: null,
+    attendanceId: null,
+  });
+  const [breakForm, setBreakForm] = useState({
+    type: "LUNCH",
+    startTime: "",
+    durationMinutes: "",
+    notes: "",
+  });
+  const [breakSubmitting, setBreakSubmitting] = useState(false);
   const [formUserQuery, setFormUserQuery] = useState("");
   const [isFormUserMenuOpen, setIsFormUserMenuOpen] = useState(false);
   const formUserMenuRef = useRef(null);
@@ -328,6 +449,31 @@ export default function AttendanceDashboard({
     }
     return attendance;
   }, [activeBadge, attendance]);
+
+  const activeBreakRecord = useMemo(() => {
+    const targetUserId = selectedUser?.id ?? currentUser?.id;
+    if (!targetUserId) {
+      return null;
+    }
+    return (
+      attendance.find(
+        (record) =>
+          (record.userId ?? record.user?.id) === targetUserId &&
+          record.inTime &&
+          !record.outTime
+      ) ?? null
+    );
+  }, [attendance, currentUser?.id, selectedUser?.id]);
+
+  const canManageBreaks = useMemo(() => {
+    if (!activeBreakRecord) {
+      return false;
+    }
+    if (isLeader) {
+      return true;
+    }
+    return isAttendanceRunning(activeBreakRecord, new Date());
+  }, [activeBreakRecord, isLeader]);
 
   const notifyAttendanceUpdated = (userId) => {
     if (typeof window === "undefined") {
@@ -510,6 +656,145 @@ export default function AttendanceDashboard({
       });
     } finally {
       setWfhSubmitting(false);
+    }
+  };
+
+  const openBreakModalForm = ({ mode, breakItem = null, attendanceId = null } = {}) => {
+    const startTimeValue = breakItem?.startAt
+      ? formatTimeInput(breakItem.startAt)
+      : formatTimeInput(new Date());
+    setBreakForm({
+      type: breakItem?.type ?? "LUNCH",
+      startTime: startTimeValue,
+      durationMinutes: breakItem?.durationMinutes?.toString() ?? "",
+      notes: breakItem?.notes ?? "",
+    });
+    setBreakModal({ open: true, mode, breakItem, attendanceId });
+  };
+
+  const closeBreakModal = () => {
+    setBreakModal({ open: false, mode: "create", breakItem: null, attendanceId: null });
+  };
+
+  const handleBreakFormChange = (event) => {
+    const { name, value } = event.target;
+    setBreakForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleBreakSubmit = async (event) => {
+    event.preventDefault();
+    const targetAttendanceId =
+      breakModal.mode === "create"
+        ? breakModal.attendanceId ?? activeBreakRecord?.id
+        : breakModal.breakItem?.attendanceId;
+    if (!targetAttendanceId) {
+      return;
+    }
+    if (!breakForm.startTime || !breakForm.durationMinutes) {
+      addToast({
+        title: "Break info required",
+        message: "Select a start time and duration.",
+        variant: "warning",
+      });
+      return;
+    }
+    setBreakSubmitting(true);
+    try {
+      const payload = {
+        type: breakForm.type,
+        startTime: breakForm.startTime,
+        durationMinutes: Number(breakForm.durationMinutes),
+        notes: breakForm.notes,
+      };
+      const endpoint =
+        breakModal.mode === "edit" && breakModal.breakItem
+          ? `/api/attendance/breaks/${breakModal.breakItem.id}`
+          : `/api/attendance/${targetAttendanceId}/breaks`;
+      const response = await fetch(endpoint, {
+        method: breakModal.mode === "edit" ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message ?? "Unable to save break.");
+      }
+      addToast({
+        title: breakModal.mode === "edit" ? "Break updated" : "Break added",
+        message: data?.message ?? "Break saved.",
+        variant: "success",
+      });
+      closeBreakModal();
+      if (data?.attendance) {
+        if (activeRecord?.id === data.attendance.id) {
+          setActiveRecord(data.attendance);
+        }
+        setAttendance((prev) =>
+          prev.map((record) =>
+            record.id === data.attendance.id ? data.attendance : record
+          )
+        );
+      } else {
+        fetchAttendance({ targetUserId: selectedUser?.id ?? "" });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to save break.";
+      addToast({
+        title: "Break failed",
+        message,
+        variant: "error",
+      });
+    } finally {
+      setBreakSubmitting(false);
+    }
+  };
+
+  const handleBreakDelete = async (breakItem) => {
+    if (!breakItem?.id) {
+      return;
+    }
+    const confirmed =
+      typeof window !== "undefined"
+        ? window.confirm("Delete this break?")
+        : false;
+    if (!confirmed) {
+      return;
+    }
+    setBreakSubmitting(true);
+    try {
+      const response = await fetch(`/api/attendance/breaks/${breakItem.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message ?? "Unable to delete break.");
+      }
+      addToast({
+        title: "Break deleted",
+        message: data?.message ?? "Break deleted.",
+        variant: "success",
+      });
+      if (data?.attendance) {
+        if (activeRecord?.id === data.attendance.id) {
+          setActiveRecord(data.attendance);
+        }
+        setAttendance((prev) =>
+          prev.map((record) =>
+            record.id === data.attendance.id ? data.attendance : record
+          )
+        );
+      } else {
+        fetchAttendance({ targetUserId: selectedUser?.id ?? "" });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to delete break.";
+      addToast({
+        title: "Break failed",
+        message,
+        variant: "error",
+      });
+    } finally {
+      setBreakSubmitting(false);
     }
   };
 
@@ -698,6 +983,72 @@ export default function AttendanceDashboard({
           </div>
         ) : null}
       </div>
+
+      {activeBreakRecord &&
+      (isLeader || isAttendanceRunning(activeBreakRecord, new Date())) ? (
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[color:var(--color-text)]">Breaks</p>
+              <p className="text-xs text-[color:var(--color-text-muted)]">
+                {activeBreakRecord.user?.name ?? "Current user"} ·{" "}
+                {formatDisplayDate(activeBreakRecord.date)}
+              </p>
+            </div>
+            <ActionButton
+              label="Add Break"
+              variant="secondary"
+              onClick={() =>
+                openBreakModalForm({
+                  mode: "create",
+                  attendanceId: activeBreakRecord.id,
+                })
+              }
+              disabled={!canManageBreaks}
+            />
+          </div>
+          {activeBreakRecord.breaks?.length ? (
+            <ul className="mt-4 space-y-3 text-sm text-[color:var(--color-text)]">
+              {activeBreakRecord.breaks.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-3"
+                >
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[color:var(--color-text-muted)]">
+                        {formatBreakType(item.type)}
+                      </span>
+                      <span className="text-xs text-[color:var(--color-text-muted)]">
+                        {formatDurationFromMinutes(item.durationMinutes)}
+                      </span>
+                      <span className="text-xs text-[color:var(--color-text-subtle)]">
+                        {formatDisplayTime(item.startAt)} →{" "}
+                        {formatDisplayTime(item.endAt)}
+                      </span>
+                    </div>
+                    {item.notes ? (
+                      <p className="text-xs text-[color:var(--color-text-muted)]">
+                        {item.notes}
+                      </p>
+                    ) : null}
+                  </div>
+                  <BreakMenu
+                    onEdit={() => openBreakModalForm({ mode: "edit", breakItem: item })}
+                    onDelete={() => handleBreakDelete(item)}
+                    disabled={!canManageBreaks}
+                    tooltip="Breaks can only be edited while duty is running."
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-[color:var(--color-text-subtle)]">
+              No breaks recorded yet.
+            </p>
+          )}
+        </div>
+      ) : null}
 
       {status.loading ? (
         <div className="space-y-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6">
@@ -974,6 +1325,70 @@ export default function AttendanceDashboard({
                 </div>
               </div>
             </div>
+            {modalState.mode === "edit" && activeRecord ? (
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-subtle)]">
+                    Breaks
+                  </p>
+                  {isLeader || isAttendanceRunning(activeRecord, new Date()) ? (
+                    <ActionButton
+                      label="Add break"
+                      variant="secondary"
+                      type="button"
+                      onClick={() =>
+                        openBreakModalForm({
+                          mode: "create",
+                          attendanceId: activeRecord.id,
+                        })
+                      }
+                    />
+                  ) : null}
+                </div>
+                {activeRecord.breaks?.length ? (
+                  <ul className="mt-3 space-y-2 text-xs text-[color:var(--color-text-muted)]">
+                    {activeRecord.breaks.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-3 py-2"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
+                          {formatBreakType(item.type)}
+                            </span>
+                            <span>{formatDurationFromMinutes(item.durationMinutes)}</span>
+                            <span>
+                              {formatDisplayTime(item.startAt)} →{" "}
+                              {formatDisplayTime(item.endAt)}
+                            </span>
+                          </div>
+                          {item.notes ? <p>{item.notes}</p> : null}
+                        </div>
+                        {isLeader || isAttendanceRunning(activeRecord, new Date()) ? (
+                          <BreakMenu
+                            onEdit={() =>
+                              openBreakModalForm({ mode: "edit", breakItem: item })
+                            }
+                            onDelete={() => handleBreakDelete(item)}
+                            disabled={false}
+                          />
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 text-xs text-[color:var(--color-text-subtle)]">
+                    No breaks recorded.
+                  </p>
+                )}
+                {!isLeader && !isAttendanceRunning(activeRecord, new Date()) ? (
+                  <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
+                    Breaks can be edited while duty is running.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="sticky bottom-0 mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-card)] pt-4">
             <ActionButton
@@ -981,6 +1396,77 @@ export default function AttendanceDashboard({
               variant="primary"
               type="submit"
               className="min-w-[160px]"
+            />
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={breakModal.open}
+        title={breakModal.mode === "edit" ? "Edit break" : "Add break"}
+        description="Log a break taken during duty."
+        onClose={closeBreakModal}
+      >
+        <form onSubmit={handleBreakSubmit} className="flex h-full flex-col">
+          <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1 hide-scrollbar">
+            <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+              Break type
+              <select
+                name="type"
+                value={breakForm.type}
+                onChange={handleBreakFormChange}
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+              >
+                {breakTypeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                Start time
+                <input
+                  type="time"
+                  name="startTime"
+                  value={breakForm.startTime}
+                  onChange={handleBreakFormChange}
+                  required
+                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                />
+              </label>
+              <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                Duration (minutes)
+                <input
+                  type="number"
+                  name="durationMinutes"
+                  value={breakForm.durationMinutes}
+                  onChange={handleBreakFormChange}
+                  min={1}
+                  required
+                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                />
+              </label>
+            </div>
+            <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+              Notes (optional)
+              <textarea
+                name="notes"
+                value={breakForm.notes}
+                onChange={handleBreakFormChange}
+                rows={3}
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+              />
+            </label>
+          </div>
+          <div className="sticky bottom-0 mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-card)] pt-4">
+            <ActionButton
+              label={breakSubmitting ? "Saving..." : "Save break"}
+              variant="primary"
+              type="submit"
+              className="min-w-[160px]"
+              disabled={breakSubmitting}
             />
           </div>
         </form>

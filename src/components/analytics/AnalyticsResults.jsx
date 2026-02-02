@@ -48,6 +48,7 @@ const EMPTY_TOTALS = {
   breakSeconds: 0,
   idleSeconds: 0,
   wfhSeconds: 0,
+  noDutySeconds: 0,
   utilization: 0,
 };
 
@@ -58,6 +59,7 @@ function normalizeTotals(totals) {
   const idleSeconds =
     totals?.idleSeconds ?? Math.max(0, dutySeconds - workSeconds - breakSeconds);
   const wfhSeconds = totals?.wfhSeconds ?? 0;
+  const noDutySeconds = totals?.noDutySeconds ?? 0;
   const utilization =
     dutySeconds > 0 ? totals?.utilization ?? workSeconds / dutySeconds : 0;
   return {
@@ -66,6 +68,7 @@ function normalizeTotals(totals) {
     breakSeconds,
     idleSeconds,
     wfhSeconds,
+    noDutySeconds,
     utilization,
   };
 }
@@ -279,7 +282,7 @@ export default function AnalyticsResults({ period, date, userId }) {
   const payload = state.payload ?? {};
   const results = useMemo(() => payload?.users ?? [], [payload]);
   const teamTotals = normalizeTotals(payload?.teamTotals ?? EMPTY_TOTALS);
-  const teamPerDay = payload?.teamPerDay ?? [];
+  const teamPerDay = payload?.perDayTotals ?? payload?.teamPerDay ?? [];
   const mode = payload?.mode ?? "single";
 
   if (state.status === "loading") {
@@ -362,6 +365,8 @@ export default function AnalyticsResults({ period, date, userId }) {
               details: entry.details ?? {},
               totals: normalizeTotals(entry.totals ?? EMPTY_TOTALS),
               message: entry.message ?? null,
+              dayWindowStart: entry.dayWindowStart ?? payload?.dayWindowStart ?? null,
+              dayWindowEnd: entry.dayWindowEnd ?? payload?.dayWindowEnd ?? null,
             }}
           />
         ))}
@@ -444,14 +449,19 @@ export default function AnalyticsResults({ period, date, userId }) {
             <UserTotals totals={entry.totals} />
           </div>
           <div className="mt-4">
+            {(() => {
+              const perDayTotals = entry.perDayTotals ?? entry.perDay ?? [];
+              return (
             <WorkstackChart
-              perDay={entry.perDay ?? []}
+              perDay={perDayTotals}
               minWidth={
                 period === "monthly"
-                  ? Math.max(720, (entry.perDay?.length ?? 0) * 28)
+                  ? Math.max(720, perDayTotals.length * 28)
                   : 640
               }
             />
+              );
+            })()}
           </div>
         </div>
       ))}

@@ -131,6 +131,7 @@ export async function GET(request) {
     include: {
       user: { select: { id: true, name: true, role: true, email: true } },
       wfhIntervals: { orderBy: { startAt: "asc" } },
+      breaks: { orderBy: { startAt: "asc" } },
     },
   });
 
@@ -225,6 +226,7 @@ export async function POST(request) {
     include: {
       user: { select: { id: true, name: true, role: true, email: true } },
       wfhIntervals: { orderBy: { startAt: "asc" } },
+      breaks: { orderBy: { startAt: "asc" } },
     },
   });
 

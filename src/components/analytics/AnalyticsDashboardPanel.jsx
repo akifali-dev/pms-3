@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import AnalyticsResults from "@/components/analytics/AnalyticsResults";
-import ClientOnly from "@/components/ui/ClientOnly";
+import dynamic from "next/dynamic";
 import useOutsideClick from "@/hooks/useOutsideClick";
 
 const periodOptions = [
@@ -10,6 +9,18 @@ const periodOptions = [
   { id: "weekly", label: "Weekly" },
   { id: "monthly", label: "Monthly" },
 ];
+
+const AnalyticsResults = dynamic(
+  () => import("@/components/analytics/AnalyticsResults"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 text-sm text-[color:var(--color-text-muted)]">
+        Loading analytics...
+      </div>
+    ),
+  }
+);
 
 function formatDateOnly(value) {
   const date = new Date(value);
@@ -130,15 +141,7 @@ export default function AnalyticsDashboardPanel({ users, currentUser, isManager 
         ) : null}
       </div>
 
-      <ClientOnly
-        fallback={
-          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 text-sm text-[color:var(--color-text-muted)]">
-            Loading analytics...
-          </div>
-        }
-      >
-        <AnalyticsResults period={period} date={selectedDate} userId={activeUserId} />
-      </ClientOnly>
+      <AnalyticsResults period={period} date={selectedDate} userId={activeUserId} />
     </div>
   );
 }
