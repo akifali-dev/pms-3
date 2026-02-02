@@ -185,11 +185,11 @@ export default function TimelineCard({ user, timeline }) {
 
       <div className="mt-5">
         {range ? (
-          <div className="relative h-10 w-full rounded-full border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-muted)]">
+          <div className="relative h-10 w-full rounded-none border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-muted)]">
             {wfhMarkers.map((marker, index) => (
               <div
                 key={`wfh-${index}`}
-                className="absolute top-0 h-full rounded-full opacity-20"
+                className="absolute top-0 h-full rounded-none opacity-20"
                 style={{
                   left: `${marker.left}%`,
                   width: `${marker.width}%`,
@@ -200,7 +200,7 @@ export default function TimelineCard({ user, timeline }) {
             {markers.map((segment) => (
               <div
                 key={`${segment.type}-${segment.startAt}-${segment.endAt}`}
-                className="absolute top-0 h-full rounded-full"
+                className="absolute top-0 h-full rounded-none"
                 style={{
                   left: `${segment.left}%`,
                   width: `${segment.width}%`,

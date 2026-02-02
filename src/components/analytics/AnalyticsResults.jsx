@@ -229,9 +229,27 @@ function DailyUsersStackedChart({ users }) {
             tick={{ fill: "var(--color-text-muted)", fontSize: 12 }}
           />
           <Tooltip content={<DailyUsersTooltip />} />
-          <Bar dataKey="workSeconds" stackId="user" fill="var(--color-work)" name="Work" />
-          <Bar dataKey="breakSeconds" stackId="user" fill="var(--color-break)" name="Break" />
-          <Bar dataKey="idleSeconds" stackId="user" fill="var(--color-idle)" name="Idle" />
+          <Bar
+            dataKey="workSeconds"
+            stackId="user"
+            fill="var(--color-work)"
+            name="Work"
+            radius={0}
+          />
+          <Bar
+            dataKey="breakSeconds"
+            stackId="user"
+            fill="var(--color-break)"
+            name="Break"
+            radius={0}
+          />
+          <Bar
+            dataKey="idleSeconds"
+            stackId="user"
+            fill="var(--color-idle)"
+            name="Idle"
+            radius={0}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>
