@@ -1,4 +1,5 @@
-export const DUTY_CUTOFF_HOUR = 21;
+export const SHIFT_DAY_START_HOUR = 11;
+export const SHIFT_DAY_END_HOUR = 3;
 
 export function getDayBounds(date) {
   const base = date instanceof Date ? new Date(date) : new Date(date);
@@ -12,13 +13,36 @@ export function getDayBounds(date) {
   return { start, end };
 }
 
+export function getShiftWindow(date) {
+  const base = date instanceof Date ? new Date(date) : new Date(date);
+  if (Number.isNaN(base.getTime())) {
+    return null;
+  }
+  const start = new Date(base);
+  start.setHours(SHIFT_DAY_START_HOUR, 0, 0, 0);
+  const end = new Date(start);
+  const needsNextDay = SHIFT_DAY_END_HOUR <= SHIFT_DAY_START_HOUR;
+  if (needsNextDay) {
+    end.setDate(end.getDate() + 1);
+  }
+  end.setHours(SHIFT_DAY_END_HOUR, 0, 0, 0);
+  return { start, end };
+}
+
 export function getCutoffTime(date) {
   const base = date instanceof Date ? new Date(date) : new Date(date);
   if (Number.isNaN(base.getTime())) {
     return null;
   }
-  const cutoff = new Date(base);
-  cutoff.setHours(DUTY_CUTOFF_HOUR, 0, 0, 0);
+  const window = getShiftWindow(base);
+  if (!window) {
+    return null;
+  }
+  let cutoff = new Date(window.end);
+  if (cutoff <= base) {
+    cutoff = new Date(cutoff);
+    cutoff.setDate(cutoff.getDate() + 1);
+  }
   return cutoff;
 }
 

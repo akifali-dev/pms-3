@@ -77,6 +77,14 @@ enum TaskWorkSessionSource {
   WFH
 }
 
+enum AttendanceBreakType {
+  LUNCH
+  DINNER
+  NAMAZ
+  REFRESHMENT
+  OTHER
+}
+
 model User {
   id               String        @id @default(auto()) @map("_id") @db.ObjectId
   name             String
@@ -100,6 +108,7 @@ model User {
   notificationsAuthored Notification[] @relation("NotificationActor")
   notificationRecipients NotificationRecipient[]
   attendances      Attendance[]
+  attendanceBreaks AttendanceBreak[]
 }
 
 model Project {
@@ -249,12 +258,31 @@ model Attendance {
   outTime   DateTime?
   note      String?
   wfhIntervals AttendanceWFHInterval[]
+  breaks    AttendanceBreak[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, date])
   @@index([userId])
   @@index([date])
+}
+
+model AttendanceBreak {
+  id              String              @id @default(auto()) @map("_id") @db.ObjectId
+  attendanceId    String              @db.ObjectId
+  attendance      Attendance          @relation(fields: [attendanceId], references: [id])
+  type            AttendanceBreakType
+  startAt         DateTime
+  endAt           DateTime
+  durationMinutes Int
+  notes           String?
+  createdByUserId String              @db.ObjectId
+  createdByUser   User                @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([attendanceId])
+  @@index([createdByUserId])
 }
 
 model AttendanceWFHInterval {

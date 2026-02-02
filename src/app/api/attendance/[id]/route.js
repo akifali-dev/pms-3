@@ -98,7 +98,11 @@ export async function PATCH(request, { params }) {
 
   const existing = await prisma.attendance.findUnique({
     where: { id: attendanceId },
-    include: { user: { select: { id: true } }, wfhIntervals: true },
+    include: {
+      user: { select: { id: true } },
+      wfhIntervals: true,
+      breaks: { orderBy: { startAt: "asc" } },
+    },
   });
 
   if (!existing) {
@@ -184,6 +188,7 @@ export async function PATCH(request, { params }) {
       include: {
         user: { select: { id: true, name: true, role: true, email: true } },
         wfhIntervals: { orderBy: { startAt: "asc" } },
+        breaks: { orderBy: { startAt: "asc" } },
       },
     });
 

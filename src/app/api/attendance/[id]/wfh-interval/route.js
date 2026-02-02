@@ -151,6 +151,7 @@ export async function POST(request, { params }) {
     include: {
       user: { select: { id: true, name: true, role: true, email: true } },
       wfhIntervals: { orderBy: { startAt: "asc" } },
+      breaks: { orderBy: { startAt: "asc" } },
     },
   });
 
