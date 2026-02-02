@@ -4,6 +4,7 @@ import {
   buildSuccess,
   ensureAuthenticated,
   getAuthContext,
+  isManagementRole,
 } from "@/lib/api";
 
 const ALLOWED_STATUSES = ["IN_PROGRESS", "DEV_TEST"];
@@ -22,6 +23,9 @@ async function getTask(taskId) {
 
 function canManageBreak(context, task) {
   if (!task) {
+    return false;
+  }
+  if (isManagementRole(context.role)) {
     return false;
   }
   return task.ownerId === context.user.id;
@@ -62,11 +66,12 @@ export async function POST(request, { params }) {
   }
 
   const existingBreak = await prisma.taskBreak.findFirst({
-    where: { taskId, endedAt: null },
+    where: { taskId, userId: context.user.id, endedAt: null },
+    orderBy: { startedAt: "desc" },
   });
 
   if (existingBreak) {
-    return buildError("A break is already in progress for this task.", 400);
+    return buildError("A break is already in progress for this task.", 409);
   }
 
   const createdBreak = await prisma.taskBreak.create({

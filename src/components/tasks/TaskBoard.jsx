@@ -340,6 +340,25 @@ export default function TaskBoard({
     );
   };
 
+  const refreshTask = useCallback(async (taskId) => {
+    if (!taskId) {
+      return null;
+    }
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`);
+      const data = await response.json();
+      if (!response.ok || !data?.task) {
+        return null;
+      }
+      setTaskItems((prev) =>
+        prev.map((item) => (item.id === taskId ? data.task : item))
+      );
+      return data.task;
+    } catch (error) {
+      return null;
+    }
+  }, []);
+
   const handleRequestTimeSubmit = async (task) => {
     if (!task) {
       return;
@@ -438,7 +457,7 @@ export default function TaskBoard({
   };
 
   const handlePause = async (task) => {
-    if (!task) {
+    if (!task?.id) {
       return;
     }
     if (!breakForm.reason) {
@@ -460,25 +479,34 @@ export default function TaskBoard({
     });
     const data = await response.json();
     if (!response.ok) {
+      const message =
+        response.status === 403
+          ? "You are not allowed."
+          : response.status === 409
+            ? "Task is already paused."
+            : data?.error ?? "Unable to start break.";
       addToast({
         title: "Pause failed",
-        message: data?.error ?? "Unable to start break.",
+        message,
         variant: "error",
       });
       setBreakSubmitting(false);
       return;
     }
-    updateTaskState(task.id, (item) => ({
-      ...item,
-      breaks: [data.break, ...(item.breaks ?? [])],
-      activeBreak: data.break,
-    }));
+    const refreshedTask = await refreshTask(task.id);
+    if (!refreshedTask) {
+      updateTaskState(task.id, (item) => ({
+        ...item,
+        breaks: [data.break, ...(item.breaks ?? [])],
+        activeBreak: data.break,
+      }));
+    }
     setBreakPanelOpen(false);
     setBreakSubmitting(false);
   };
 
   const handleResume = async (task) => {
-    if (!task) {
+    if (!task?.id) {
       return;
     }
     setBreakSubmitting(true);
@@ -487,21 +515,30 @@ export default function TaskBoard({
     });
     const data = await response.json();
     if (!response.ok) {
+      const message =
+        response.status === 403
+          ? "You are not allowed."
+          : response.status === 404
+            ? "Task is not paused."
+            : data?.error ?? "Unable to resume task.";
       addToast({
         title: "Resume failed",
-        message: data?.error ?? "Unable to resume task.",
+        message,
         variant: "error",
       });
       setBreakSubmitting(false);
       return;
     }
-    updateTaskState(task.id, (item) => ({
-      ...item,
-      breaks: (item.breaks ?? []).map((brk) =>
-        brk.id === data.break.id ? data.break : brk
-      ),
-      activeBreak: null,
-    }));
+    const refreshedTask = await refreshTask(task.id);
+    if (!refreshedTask) {
+      updateTaskState(task.id, (item) => ({
+        ...item,
+        breaks: (item.breaks ?? []).map((brk) =>
+          brk.id === data.break.id ? data.break : brk
+        ),
+        activeBreak: null,
+      }));
+    }
     setBreakSubmitting(false);
   };
 
@@ -579,7 +616,8 @@ export default function TaskBoard({
     return isTaskOwner(task) && [roles.DEV, roles.SENIOR_DEV].includes(role);
   };
 
-  const canControlBreaks = (task) => isTaskOwner(task);
+  const canControlBreaks = (task) =>
+    isTaskOwner(task) && ![roles.PM, roles.CTO].includes(role);
 
   const handleDragStart = (event, task) => {
     if (!canMoveTaskForTask(task)) {

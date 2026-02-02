@@ -275,7 +275,10 @@ export async function PATCH(request, { params }) {
       isOnDutyNow: computed.isOnDutyNow,
       isWFHNow: computed.isWFHNow,
       isOffDutyNow: computed.isOffDutyNow,
-      activeBreak: updated.breaks?.find((brk) => !brk.endedAt) ?? null,
+      activeBreak:
+        updated.breaks?.find(
+          (brk) => !brk.endedAt && brk.userId === updated.ownerId
+        ) ?? null,
     },
     warning: offDutyWarning,
   });
