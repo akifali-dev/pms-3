@@ -32,7 +32,7 @@ function canManageBreak(context, task) {
 }
 
 export async function POST(request, { params }) {
-  const {id:taskId} = await params;
+  const { id: taskId } = await params;
 
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
@@ -81,6 +81,7 @@ export async function POST(request, { params }) {
       reason,
       note: note || null,
       startedAt: new Date(),
+      endedAt: null
     },
   });
 
