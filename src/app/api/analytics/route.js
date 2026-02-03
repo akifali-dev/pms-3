@@ -9,9 +9,10 @@ import {
   buildDateList,
   getPeriodEnd,
   getPeriodStart,
+  buildDailyUserTimeline,
   getUserDailyTimeline,
 } from "@/lib/analytics/timeline";
-import { getDayBounds } from "@/lib/dutyHours";
+import { getShiftWindow } from "@/lib/dutyHours";
 
 const MANAGEMENT_ROLES = ["CEO", "PM", "CTO"];
 
@@ -38,6 +39,7 @@ function finalizeTotals(rawTotals) {
   const workSeconds = rawTotals?.workSeconds ?? 0;
   const breakSeconds = rawTotals?.breakSeconds ?? 0;
   const wfhSeconds = rawTotals?.wfhSeconds ?? 0;
+  const noDutySeconds = rawTotals?.noDutySeconds ?? 0;
   const idleSeconds = Math.max(0, dutySeconds - workSeconds - breakSeconds);
   const utilization =
     dutySeconds > 0 ? Number((workSeconds / dutySeconds).toFixed(3)) : 0;
@@ -47,6 +49,7 @@ function finalizeTotals(rawTotals) {
     breakSeconds,
     idleSeconds,
     wfhSeconds,
+    noDutySeconds,
     utilization,
   };
 }
@@ -57,16 +60,8 @@ function accumulateTotals(acc, totals) {
     workSeconds: acc.workSeconds + (totals?.workSeconds ?? 0),
     breakSeconds: acc.breakSeconds + (totals?.breakSeconds ?? 0),
     wfhSeconds: acc.wfhSeconds + (totals?.wfhSeconds ?? 0),
+    noDutySeconds: acc.noDutySeconds + (totals?.noDutySeconds ?? 0),
   };
-}
-
-function buildEmptyTotals() {
-  return finalizeTotals({
-    dutySeconds: 0,
-    workSeconds: 0,
-    breakSeconds: 0,
-    wfhSeconds: 0,
-  });
 }
 
 export async function GET(request) {
@@ -119,10 +114,10 @@ export async function GET(request) {
   const now = new Date();
 
   if (period === "daily") {
-    const bounds = getDayBounds(baseDate);
+    const dayWindow = getShiftWindow(baseDate);
     const results = await Promise.all(
       users.map(async (user) => {
-        const timeline = await getUserDailyTimeline(prisma, user.id, baseDate, now);
+        const timeline = await buildDailyUserTimeline(prisma, user.id, baseDate, now);
         const totals = finalizeTotals(timeline.totals);
         const entry = { user, totals };
         if (mode === "single") {
@@ -131,6 +126,8 @@ export async function GET(request) {
           entry.wfhWindows = timeline.wfhWindows ?? [];
           entry.details = timeline.details ?? {};
           entry.message = timeline.message ?? null;
+          entry.dayWindowStart = timeline.dayWindow?.start?.toISOString?.() ?? null;
+          entry.dayWindowEnd = timeline.dayWindow?.end?.toISOString?.() ?? null;
         }
         return entry;
       })
@@ -139,19 +136,28 @@ export async function GET(request) {
     const teamTotals = finalizeTotals(
       results.reduce(
         (acc, entry) => accumulateTotals(acc, entry.totals),
-        { dutySeconds: 0, workSeconds: 0, breakSeconds: 0, wfhSeconds: 0 }
+        {
+          dutySeconds: 0,
+          workSeconds: 0,
+          breakSeconds: 0,
+          wfhSeconds: 0,
+          noDutySeconds: 0,
+        }
       )
     );
 
     return buildSuccess("Analytics loaded.", {
       period,
-      range: bounds
-        ? { start: bounds.start.toISOString(), end: bounds.end.toISOString() }
+      dayWindowStart: dayWindow?.start?.toISOString?.() ?? null,
+      dayWindowEnd: dayWindow?.end?.toISOString?.() ?? null,
+      range: dayWindow
+        ? { start: dayWindow.start.toISOString(), end: dayWindow.end.toISOString() }
         : null,
       mode,
       users: results,
       teamTotals,
       teamPerDay: [],
+      perDayTotals: [],
     });
   }
 
@@ -182,6 +188,7 @@ export async function GET(request) {
         user,
         totals,
         perDay,
+        perDayTotals: perDay,
       };
     })
   );
@@ -190,7 +197,13 @@ export async function GET(request) {
     const totals = finalizeTotals(
       results.reduce(
         (acc, entry) => accumulateTotals(acc, entry.perDay[index]?.totals),
-        { dutySeconds: 0, workSeconds: 0, breakSeconds: 0, wfhSeconds: 0 }
+        {
+          dutySeconds: 0,
+          workSeconds: 0,
+          breakSeconds: 0,
+          wfhSeconds: 0,
+          noDutySeconds: 0,
+        }
       )
     );
     return { date: day.toISOString(), totals };
@@ -199,7 +212,13 @@ export async function GET(request) {
   const teamTotals = finalizeTotals(
     results.reduce(
       (acc, entry) => accumulateTotals(acc, entry.totals),
-      { dutySeconds: 0, workSeconds: 0, breakSeconds: 0, wfhSeconds: 0 }
+      {
+        dutySeconds: 0,
+        workSeconds: 0,
+        breakSeconds: 0,
+        wfhSeconds: 0,
+        noDutySeconds: 0,
+      }
     )
   );
 
@@ -210,5 +229,6 @@ export async function GET(request) {
     users: results,
     teamTotals,
     teamPerDay,
+    perDayTotals: teamPerDay,
   });
 }

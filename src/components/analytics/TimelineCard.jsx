@@ -6,6 +6,7 @@ const SEGMENT_COLORS = {
   WORK: "var(--color-work)",
   IDLE: "var(--color-idle)",
   BREAK: "var(--color-break)",
+  NO_DUTY: "var(--color-off-duty)",
 };
 
 function formatDuration(seconds) {
@@ -39,7 +40,14 @@ function getTimeLabel(date) {
   return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function buildRange(dutyWindows) {
+function buildRange(dayWindowStart, dayWindowEnd, dutyWindows) {
+  if (dayWindowStart && dayWindowEnd) {
+    const start = new Date(dayWindowStart);
+    const end = new Date(dayWindowEnd);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
+      return { start, end };
+    }
+  }
   if (!Array.isArray(dutyWindows) || dutyWindows.length === 0) {
     return null;
   }
@@ -74,7 +82,15 @@ function getWidthPercent(range, start, end) {
 }
 
 export default function TimelineCard({ user, timeline }) {
-  const range = useMemo(() => buildRange(timeline?.dutyWindows ?? []), [timeline]);
+  const range = useMemo(
+    () =>
+      buildRange(
+        timeline?.dayWindowStart,
+        timeline?.dayWindowEnd,
+        timeline?.dutyWindows ?? []
+      ),
+    [timeline]
+  );
   const segments = timeline?.segments ?? [];
   const totals = timeline?.totals ?? {};
   const details = timeline?.details ?? {};
@@ -169,11 +185,11 @@ export default function TimelineCard({ user, timeline }) {
 
       <div className="mt-5">
         {range ? (
-          <div className="relative h-10 w-full rounded-full border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-muted)]">
+          <div className="relative h-10 w-full rounded-none border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-muted)]">
             {wfhMarkers.map((marker, index) => (
               <div
                 key={`wfh-${index}`}
-                className="absolute top-0 h-full rounded-full opacity-20"
+                className="absolute top-0 h-full rounded-none opacity-20"
                 style={{
                   left: `${marker.left}%`,
                   width: `${marker.width}%`,
@@ -184,7 +200,7 @@ export default function TimelineCard({ user, timeline }) {
             {markers.map((segment) => (
               <div
                 key={`${segment.type}-${segment.startAt}-${segment.endAt}`}
-                className="absolute top-0 h-full rounded-full"
+                className="absolute top-0 h-full rounded-none"
                 style={{
                   left: `${segment.left}%`,
                   width: `${segment.width}%`,
@@ -220,6 +236,13 @@ export default function TimelineCard({ user, timeline }) {
         <span className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full" style={{ background: SEGMENT_COLORS.IDLE }} />
           Idle
+        </span>
+        <span className="flex items-center gap-2">
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{ background: SEGMENT_COLORS.NO_DUTY }}
+          />
+          No duty
         </span>
         <span className="flex items-center gap-2">
           <span

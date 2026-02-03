@@ -1,3 +1,5 @@
+import { SHIFT_DAY_START_HOUR } from "@/lib/dutyHours";
+
 function formatDateInput(value) {
   if (!value) {
     return null;
@@ -73,6 +75,28 @@ export function combineDateAndTime(dateValue, timeValue) {
     timeParts.seconds,
     timeParts.milliseconds
   );
+  return base;
+}
+
+export function combineShiftDateAndTime(dateValue, timeValue) {
+  const dateString = formatDateInput(dateValue);
+  const timeParts = extractTimeParts(timeValue);
+  if (!dateString || !timeParts) {
+    return null;
+  }
+  const base = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(base.getTime())) {
+    return null;
+  }
+  base.setHours(
+    timeParts.hours,
+    timeParts.minutes,
+    timeParts.seconds,
+    timeParts.milliseconds
+  );
+  if (timeParts.hours < SHIFT_DAY_START_HOUR) {
+    base.setDate(base.getDate() + 1);
+  }
   return base;
 }
 

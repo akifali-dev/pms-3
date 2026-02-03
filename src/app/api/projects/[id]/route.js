@@ -10,6 +10,7 @@ import {
   PROJECT_MANAGEMENT_ROLES,
 } from "@/lib/api";
 import { createNotification } from "@/lib/notifications";
+import { ensureTaskUpdatedAt } from "@/lib/taskDataFixes";
 
 async function getProjectWithAccess(projectId) {
   return prisma.project.findUnique({
@@ -209,6 +210,10 @@ export async function DELETE(request, { params }) {
     });
 
     const milestoneIds = milestones.map((milestone) => milestone.id);
+
+    if (milestoneIds.length) {
+      await ensureTaskUpdatedAt(prisma, { milestoneId: { in: milestoneIds } });
+    }
 
     const tasks = milestoneIds.length
       ? await prisma.task.findMany({

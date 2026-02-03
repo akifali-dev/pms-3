@@ -60,6 +60,7 @@ export default async function AttendancePage() {
         include: {
           user: { select: { id: true, name: true, email: true, role: true } },
           wfhIntervals: { orderBy: { startAt: "asc" } },
+          breaks: { orderBy: { startAt: "asc" } },
         },
       });
       attendance = attendance.map((record) => {

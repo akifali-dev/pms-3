@@ -13,7 +13,19 @@ import { createNotification } from "@/lib/notifications";
 async function getTask(taskId) {
   return prisma.task.findUnique({
     where: { id: taskId },
-    include: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      status: true,
+      type: true,
+      ownerId: true,
+      milestoneId: true,
+      estimatedHours: true,
+      reworkCount: true,
+      totalTimeSpent: true,
+      lastStartedAt: true,
+      createdAt: true,
       owner: { select: { id: true, name: true, email: true, role: true } },
       milestone: {
         select: {
@@ -81,7 +93,10 @@ export async function GET(request, { params }) {
       isOnDutyNow: computed.isOnDutyNow,
       isWFHNow: computed.isWFHNow,
       isOffDutyNow: computed.isOffDutyNow,
-      activeBreak: task.breaks?.find((brk) => !brk.endedAt) ?? null,
+      activeBreak:
+        task.breaks?.find(
+          (brk) => !brk.endedAt && brk.userId === task.ownerId
+        ) ?? null,
     },
   });
 }
@@ -211,7 +226,19 @@ export async function PATCH(request, { params }) {
 
     const nextTask = await tx.task.findUnique({
       where: { id: taskId },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        type: true,
+        ownerId: true,
+        milestoneId: true,
+        estimatedHours: true,
+        reworkCount: true,
+        totalTimeSpent: true,
+        lastStartedAt: true,
+        createdAt: true,
         owner: { select: { id: true, name: true, email: true, role: true } },
         milestone: {
           select: { id: true, title: true, projectId: true },

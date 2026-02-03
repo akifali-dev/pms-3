@@ -1,4 +1,4 @@
-import { getCutoffTime, getDayBounds, mergeIntervals } from "@/lib/dutyHours";
+import { getCutoffTime, getShiftWindow, mergeIntervals } from "@/lib/dutyHours";
 
 const WORKING_STATUSES = new Set(["IN_PROGRESS", "DEV_TEST"]);
 
@@ -195,11 +195,18 @@ function isIntervalOverlapping(interval, targets) {
 }
 
 function buildSegments({
+  dayWindow,
   dutyWindows,
   workIntervals,
   breakIntervals,
   wfhIntervals,
 }) {
+  const noDutyIntervals = dayWindow
+    ? subtractIntervals(
+        [{ start: dayWindow.start, end: dayWindow.end }],
+        dutyWindows
+      )
+    : [];
   const mergedBreaks = mergeSimpleIntervals(breakIntervals);
   const workMinusBreaks = subtractIntervals(workIntervals, mergedBreaks);
   const occupied = mergeSimpleIntervals([...workMinusBreaks, ...mergedBreaks]);
@@ -239,10 +246,25 @@ function buildSegments({
     });
   });
 
+  noDutyIntervals.forEach((interval) => {
+    segments.push({
+      startAt: interval.start,
+      endAt: interval.end,
+      type: "NO_DUTY",
+      isWFH: false,
+    });
+  });
+
   return segments.sort((a, b) => a.startAt - b.startAt);
 }
 
-function calculateTotals({ dutyWindows, segments, breakIntervals, wfhIntervals }) {
+function calculateTotals({
+  dayWindow,
+  dutyWindows,
+  segments,
+  breakIntervals,
+  wfhIntervals,
+}) {
   const dutySeconds = sumIntervalsSeconds(dutyWindows);
   const workSeconds = sumIntervalsSeconds(
     segments.filter((segment) => segment.type === "WORK").map((segment) => ({
@@ -261,6 +283,13 @@ function calculateTotals({ dutyWindows, segments, breakIntervals, wfhIntervals }
       (wfhIntervals ?? []).map((interval) => ({ start: interval.start, end: interval.end }))
     )
   );
+  const dayWindowSeconds = dayWindow
+    ? Math.max(
+        0,
+        Math.floor((dayWindow.end.getTime() - dayWindow.start.getTime()) / 1000)
+      )
+    : 0;
+  const noDutySeconds = Math.max(0, dayWindowSeconds - dutySeconds);
   const utilization =
     dutySeconds > 0 ? Number((workSeconds / dutySeconds).toFixed(3)) : 0;
   return {
@@ -269,6 +298,7 @@ function calculateTotals({ dutyWindows, segments, breakIntervals, wfhIntervals }
     breakSeconds,
     idleSeconds,
     wfhSeconds,
+    noDutySeconds,
     utilization,
   };
 }
@@ -309,6 +339,7 @@ function buildTimelineDetails({ dutyWindows, segments, breakIntervals, totals })
 export async function getUserDailyTimeline(prismaClient, userId, date, now = new Date()) {
   if (!prismaClient || !userId) {
     const totals = calculateTotals({
+      dayWindow: null,
       dutyWindows: [],
       segments: [],
       breakIntervals: [],
@@ -325,12 +356,14 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
       }),
       dutyWindows: [],
       wfhWindows: [],
+      dayWindow: null,
       message: "No attendance recorded.",
     };
   }
-  const bounds = getDayBounds(date);
-  if (!bounds) {
+  const dayWindow = getShiftWindow(date);
+  if (!dayWindow) {
     const totals = calculateTotals({
+      dayWindow: null,
       dutyWindows: [],
       segments: [],
       breakIntervals: [],
@@ -347,6 +380,7 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
       }),
       dutyWindows: [],
       wfhWindows: [],
+      dayWindow: null,
       message: "Invalid date.",
     };
   }
@@ -354,20 +388,20 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
   const attendances = await prismaClient.attendance.findMany({
     where: {
       userId,
-      inTime: { lte: bounds.end },
-      OR: [{ outTime: null }, { outTime: { gte: bounds.start } }],
+      inTime: { lte: dayWindow.end },
+      OR: [{ outTime: null }, { outTime: { gte: dayWindow.start } }],
     },
-    include: { wfhIntervals: true },
+    include: { wfhIntervals: true, breaks: true },
     orderBy: { inTime: "asc" },
   });
 
   const attendanceIntervals = attendances.flatMap((attendance) => {
-    const { dutyIntervals } = buildAttendanceIntervals(attendance, bounds, now);
+    const { dutyIntervals } = buildAttendanceIntervals(attendance, dayWindow, now);
     return dutyIntervals;
   });
 
   const wfhIntervals = attendances.flatMap((attendance) => {
-    const { wfhIntervals: intervals } = buildAttendanceIntervals(attendance, bounds, now);
+    const { wfhIntervals: intervals } = buildAttendanceIntervals(attendance, dayWindow, now);
     return intervals;
   });
 
@@ -376,31 +410,51 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
   const dutyWindows = mergeIntervals(dutyIntervals);
   if (dutyWindows.length === 0) {
     const totals = calculateTotals({
+      dayWindow,
       dutyWindows: [],
-      segments: [],
+      segments: buildSegments({
+        dayWindow,
+        dutyWindows: [],
+        workIntervals: [],
+        breakIntervals: [],
+        wfhIntervals: [],
+      }),
       breakIntervals: [],
       wfhIntervals: [],
     });
     return {
-      segments: [],
+      segments: buildSegments({
+        dayWindow,
+        dutyWindows: [],
+        workIntervals: [],
+        breakIntervals: [],
+        wfhIntervals: [],
+      }),
       totals,
       details: buildTimelineDetails({
         dutyWindows: [],
-        segments: [],
+        segments: buildSegments({
+          dayWindow,
+          dutyWindows: [],
+          workIntervals: [],
+          breakIntervals: [],
+          wfhIntervals: [],
+        }),
         breakIntervals: [],
         totals,
       }),
       dutyWindows: [],
       wfhWindows: wfhIntervals,
-      message: "No attendance recorded.",
+      dayWindow,
+      message: null,
     };
   }
 
   const workLogs = await prismaClient.taskTimeLog.findMany({
     where: {
       status: { in: Array.from(WORKING_STATUSES) },
-      startedAt: { lte: bounds.end },
-      OR: [{ endedAt: null }, { endedAt: { gte: bounds.start } }],
+      startedAt: { lte: dayWindow.end },
+      OR: [{ endedAt: null }, { endedAt: { gte: dayWindow.start } }],
       task: { ownerId: userId },
     },
     select: {
@@ -418,35 +472,25 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
       if (!start || !end || end <= start) {
         return null;
       }
-      const clamped = clampIntervalToBounds({ start, end, taskId: log.taskId }, bounds);
+      const clamped = clampIntervalToBounds(
+        { start, end, taskId: log.taskId },
+        dayWindow
+      );
       return clamped;
     })
     .filter(Boolean);
 
-  const breaks = await prismaClient.taskBreak.findMany({
-    where: {
-      userId,
-      startedAt: { lte: bounds.end },
-      OR: [{ endedAt: null }, { endedAt: { gte: bounds.start } }],
-    },
-    select: {
-      id: true,
-      reason: true,
-      startedAt: true,
-      endedAt: true,
-    },
-  });
-
-  const rawBreakIntervals = breaks
+  const rawBreakIntervals = attendances
+    .flatMap((attendance) => attendance.breaks ?? [])
     .map((brk) => {
-      const start = normalizeDate(brk.startedAt);
-      const end = normalizeDate(brk.endedAt) ?? now;
+      const start = normalizeDate(brk.startAt);
+      const end = normalizeDate(brk.endAt);
       if (!start || !end || end <= start) {
         return null;
       }
       return clampIntervalToBounds(
-        { start, end, reason: brk.reason ?? "OTHER" },
-        bounds
+        { start, end, reason: brk.type ?? "OTHER" },
+        dayWindow
       );
     })
     .filter(Boolean);
@@ -455,6 +499,7 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
   const breakIntervals = intersectIntervalsWithWindows(rawBreakIntervals, dutyWindows);
 
   const segments = buildSegments({
+    dayWindow,
     dutyWindows,
     workIntervals,
     breakIntervals,
@@ -462,6 +507,7 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
   });
 
   const totals = calculateTotals({
+    dayWindow,
     dutyWindows,
     segments,
     breakIntervals,
@@ -480,8 +526,18 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
     details,
     dutyWindows,
     wfhWindows: wfhIntervals,
+    dayWindow,
     message: segments.length === 0 ? "No activity recorded." : null,
   };
+}
+
+export async function buildDailyUserTimeline(
+  prismaClient,
+  userId,
+  date,
+  now = new Date()
+) {
+  return getUserDailyTimeline(prismaClient, userId, date, now);
 }
 
 export function getPeriodStart(date, period) {
