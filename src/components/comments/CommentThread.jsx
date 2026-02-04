@@ -172,7 +172,7 @@ export default function CommentThread({
   };
 
   const handleSubmit = async (event) => {
-    event.preventDefault();
+    event?.preventDefault();
     const trimmed = message.trim();
     if (!trimmed) {
       return;
@@ -249,7 +249,7 @@ export default function CommentThread({
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-2">
+      <div className="space-y-2">
         <div className="relative" ref={mentionRef}>
           <textarea
             ref={inputRef}
@@ -279,14 +279,15 @@ export default function CommentThread({
         </div>
         <div className="flex justify-end">
           <button
-            type="submit"
+            type="button"
+            onClick={handleSubmit}
             disabled={status.submitting}
             className="rounded-full border border-[color:var(--color-border)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-muted)] transition hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {status.submitting ? "Sending..." : "Send"}
           </button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
