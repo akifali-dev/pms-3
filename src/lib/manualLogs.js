@@ -3,6 +3,7 @@ import {
   parseDateInput,
   zonedTimeToUtc,
 } from "@/lib/attendanceTimes";
+import { getDutyDate } from "@/lib/dutyHours";
 
 export const MANUAL_LOG_CATEGORIES = ["LEARNING", "RESEARCH", "OTHER"];
 
@@ -60,8 +61,12 @@ function addDaysToDateString(dateString, days) {
   return base.toISOString().slice(0, 10);
 }
 
-export function getManualLogDateBounds(baseDate = new Date()) {
-  const max = normalizeManualDate(baseDate);
+export function getManualLogDateBounds(
+  baseDate = new Date(),
+  timeZone = DEFAULT_TIME_ZONE
+) {
+  const dutyDate = getDutyDate(baseDate, timeZone);
+  const max = normalizeManualDate(dutyDate ?? baseDate, timeZone);
   if (!max) {
     return { min: null, max: null };
   }
@@ -69,12 +74,16 @@ export function getManualLogDateBounds(baseDate = new Date()) {
   return { min, max };
 }
 
-export function isManualLogDateAllowed(date, baseDate = new Date()) {
-  const normalized = normalizeManualDate(date);
+export function isManualLogDateAllowed(
+  date,
+  baseDate = new Date(),
+  timeZone = DEFAULT_TIME_ZONE
+) {
+  const normalized = normalizeManualDate(date, timeZone);
   if (!normalized) {
     return false;
   }
-  const { min, max } = getManualLogDateBounds(baseDate);
+  const { min, max } = getManualLogDateBounds(baseDate, timeZone);
   if (!min || !max) {
     return false;
   }
@@ -90,7 +99,8 @@ export function isManualLogInFuture(
   if (!normalized) {
     return false;
   }
-  const today = normalizeManualDate(baseDate, timeZone);
+  const dutyDate = getDutyDate(baseDate, timeZone);
+  const today = normalizeManualDate(dutyDate ?? baseDate, timeZone);
   if (!today) {
     return false;
   }

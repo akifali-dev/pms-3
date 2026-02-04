@@ -7,7 +7,7 @@ import {
   isAdminRole,
   isManagementRole,
 } from "@/lib/api";
-import { getDutyWindows } from "@/lib/dutyHours";
+import { getDutyDate, getDutyWindows } from "@/lib/dutyHours";
 
 export async function GET(request) {
   const context = await getAuthContext();
@@ -28,7 +28,8 @@ export async function GET(request) {
     return buildError("You do not have permission to view duty windows.", 403);
   }
 
-  const date = dateParam ? new Date(dateParam) : new Date();
+  const dutyDate = getDutyDate(new Date());
+  const date = dateParam ? new Date(dateParam) : dutyDate ? new Date(dutyDate) : new Date();
   if (Number.isNaN(date.getTime())) {
     return buildError("Date must be valid.", 400);
   }

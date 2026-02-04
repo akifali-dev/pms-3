@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import {
   computeAttendanceDurationsForRecord,
+  getDutyDate,
   getUserPresenceNow,
 } from "@/lib/dutyHours";
 import { getTimeZoneNow, normalizeAttendanceTimes } from "@/lib/attendanceTimes";
@@ -46,7 +47,8 @@ function normalizeDateRange(from, to) {
 }
 
 function getEditWindow() {
-  const today = normalizeDateOnly(new Date());
+  const dutyDate = getDutyDate(getTimeZoneNow());
+  const today = normalizeDateOnly(dutyDate ?? new Date());
   if (!today) {
     return null;
   }

@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import {
   computeAttendanceDurationsForRecord,
+  getDutyDate,
   getUserPresenceNow,
 } from "@/lib/dutyHours";
 import { getTimeZoneNow, normalizeWfhInterval } from "@/lib/attendanceTimes";
@@ -76,7 +77,8 @@ export async function POST(request, { params }) {
     return buildError("Add out time to enable WFH.", 400);
   }
 
-  const today = normalizeDateOnly(new Date());
+  const dutyDate = getDutyDate(getTimeZoneNow());
+  const today = normalizeDateOnly(dutyDate ?? new Date());
   const attendanceDate = normalizeDateOnly(attendance.date);
   if (!today || !attendanceDate || attendanceDate.getTime() !== today.getTime()) {
     return buildError("WFH intervals can only be added for today.", 400);
