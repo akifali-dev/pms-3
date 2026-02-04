@@ -233,6 +233,7 @@ function buildSegments({
       endAt: interval.end,
       type: "BREAK",
       reason: interval.reason ?? "OTHER",
+      breakType: interval.breakType ?? "ATTENDANCE",
       isWFH: isIntervalOverlapping(interval, wfhIntervals),
     });
   });
@@ -489,14 +490,40 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
         return null;
       }
       return clampIntervalToBounds(
-        { start, end, reason: brk.type ?? "OTHER" },
+        { start, end, reason: brk.type ?? "OTHER", breakType: "ATTENDANCE" },
+        dayWindow
+      );
+    })
+    .filter(Boolean);
+
+  const taskBreaks = await prismaClient.taskBreak.findMany({
+    where: {
+      userId,
+      startedAt: { lte: dayWindow.end },
+      OR: [{ endedAt: null }, { endedAt: { gte: dayWindow.start } }],
+    },
+    select: { startedAt: true, endedAt: true, reason: true },
+  });
+
+  const rawTaskBreakIntervals = taskBreaks
+    .map((brk) => {
+      const start = normalizeDate(brk.startedAt);
+      const end = normalizeDate(brk.endedAt) ?? now;
+      if (!start || !end || end <= start) {
+        return null;
+      }
+      return clampIntervalToBounds(
+        { start, end, reason: brk.reason ?? "OTHER", breakType: "TASK_PAUSE" },
         dayWindow
       );
     })
     .filter(Boolean);
 
   const workIntervals = intersectIntervalsWithWindows(rawWorkIntervals, dutyWindows);
-  const breakIntervals = intersectIntervalsWithWindows(rawBreakIntervals, dutyWindows);
+  const breakIntervals = intersectIntervalsWithWindows(
+    [...rawBreakIntervals, ...rawTaskBreakIntervals],
+    dutyWindows
+  );
 
   const segments = buildSegments({
     dayWindow,

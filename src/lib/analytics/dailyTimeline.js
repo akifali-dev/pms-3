@@ -169,12 +169,14 @@ function buildSegments({
 
     let type = "NO_DUTY";
     let breakType = null;
+    let breakReason = null;
     let label = "Off duty";
 
     if (activeBreak) {
       type = "BREAK";
-      breakType = activeBreak.reason ?? "OTHER";
-      label = breakType;
+      breakType = activeBreak.breakType ?? "ATTENDANCE";
+      breakReason = activeBreak.reason ?? "OTHER";
+      label = breakReason;
     } else if (activeTask) {
       type = "WORK_TASK";
       label = "Task";
@@ -191,6 +193,7 @@ function buildSegments({
       endAt: end.toISOString(),
       type,
       breakType,
+      breakReason,
       isWFH: activeWfh,
       label,
     });
@@ -203,7 +206,8 @@ function buildSegments({
       last &&
       last.type === segment.type &&
       last.isWFH === segment.isWFH &&
-      last.breakType === segment.breakType
+      last.breakType === segment.breakType &&
+      last.breakReason === segment.breakReason
     ) {
       last.endAt = segment.endAt;
       return;
@@ -287,7 +291,12 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
       const start = normalizeDate(brk.startAt);
       const end = normalizeDate(brk.endAt);
       if (start && end && end > start) {
-        breakIntervals.push({ start, end, reason: brk.type ?? "OTHER" });
+        breakIntervals.push({
+          start,
+          end,
+          reason: brk.type ?? "OTHER",
+          breakType: "ATTENDANCE",
+        });
       }
     });
   });
@@ -309,7 +318,7 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
       startedAt: { lte: windowEnd },
       OR: [{ endedAt: null }, { endedAt: { gte: windowStart } }],
     },
-    select: { startedAt: true, endedAt: true },
+    select: { startedAt: true, endedAt: true, reason: true },
   });
 
   const rawTaskIntervals = workLogs
@@ -330,7 +339,7 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
       if (!start || !end || end <= start) {
         return null;
       }
-      return { start, end };
+      return { start, end, reason: brk.reason ?? "OTHER", breakType: "TASK_PAUSE" };
     })
     .filter(Boolean);
 
@@ -360,7 +369,7 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
   return {
     dutyWindows,
     wfhIntervals,
-    breakIntervals,
+    breakIntervals: [...breakIntervals, ...taskBreakIntervals],
     taskIntervals,
     manualIntervals,
   };
