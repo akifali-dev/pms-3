@@ -1390,7 +1390,7 @@ export default function AttendanceDashboard({
               </div>
             ) : null}
           </div>
-          <div className="sticky bottom-0 mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-card)] pt-4">
+          <div className="sticky bottom-0 mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-[color:var(--color-border)] bg-[color:var(--color-card)] py-4">
             <ActionButton
               label={modalState.mode === "edit" ? "Save changes" : "Save attendance"}
               variant="primary"

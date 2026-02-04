@@ -66,13 +66,13 @@ function formatDuration(seconds) {
 }
 
 export async function GET(request, { params }) {
+  const {id:taskId} = await params;
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
     return authError;
   }
 
-  const { id: taskId } = await params;
   if (!taskId) {
     return buildError("Task id is required.", 400);
   }
