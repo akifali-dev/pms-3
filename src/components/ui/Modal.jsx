@@ -31,7 +31,7 @@ export default function Modal({
         onClick={onClose}
         role="presentation"
       />
-      <div className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 shadow-2xl max-h-[80vh]">
+      <div className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 shadow-2xl max-h-[80vh] min-h-0">
         <div className="space-y-2">
           <h3 className="text-lg font-semibold text-[color:var(--color-text)]">
             {title}
@@ -42,7 +42,7 @@ export default function Modal({
             </p>
           ) : null}
         </div>
-        <div className="mt-6 flex-1 overflow-y-auto">{children}</div>
+        <div className="mt-6 flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
     </div>
   );
