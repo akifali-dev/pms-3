@@ -26,10 +26,12 @@ const badgeOptions = [
 const manualCategories = [
   { id: "LEARNING", label: "Learning" },
   { id: "RESEARCH", label: "Research" },
-  { id: "IDLE", label: "Idle time" },
+  { id: "OTHER", label: "Other" },
 ];
 
-const logTypeOptions = [{ id: "MANUAL", label: "Manual" }];
+const manualCategoryLabelMap = new Map(
+  manualCategories.map((category) => [category.id, category.label])
+);
 
 function formatDateTime(value) {
   const date = new Date(value);
@@ -45,6 +47,31 @@ function formatDateOnly(value) {
     return "";
   }
   return date.toISOString().slice(0, 10);
+}
+
+function formatTimeOnly(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toISOString().slice(11, 16);
+}
+
+function getManualLogDateBounds(baseDate = new Date()) {
+  const maxDate = formatDateOnly(baseDate);
+  const minDate = new Date(baseDate);
+  minDate.setDate(minDate.getDate() - 2);
+  return { min: formatDateOnly(minDate), max: maxDate };
+}
+
+function isManualLogDateAllowed(dateValue, bounds) {
+  if (!dateValue || !bounds?.min || !bounds?.max) {
+    return false;
+  }
+  return dateValue >= bounds.min && dateValue <= bounds.max;
 }
 
 
@@ -169,10 +196,10 @@ export default function ActivityDashboard({
   const userMenuRef = useRef(null);
 
   const [logForm, setLogForm] = useState({
-    type: "MANUAL",
-    category: "LEARNING",
+    categories: ["LEARNING"],
     date: "",
-    hoursSpent: 1,
+    startTime: "",
+    endTime: "",
     description: "",
     taskId: "",
   });
@@ -238,7 +265,7 @@ export default function ActivityDashboard({
 
   useEffect(() => {
     const manualLogIds = logs
-      .filter((log) => log.category !== "TASK")
+      .filter((log) => !log.taskId)
       .map((log) => log.id);
     if (manualLogIds.length === 0) {
       setCommentCounts({});
@@ -270,7 +297,7 @@ export default function ActivityDashboard({
   const badgeCounts = useMemo(() => {
     const counts = { all: logs.length, task: 0, manual: 0 };
     logs.forEach((log) => {
-      if (log.category === "TASK") {
+      if (log.taskId) {
         counts.task += 1;
       } else {
         counts.manual += 1;
@@ -281,10 +308,10 @@ export default function ActivityDashboard({
 
   const filteredLogs = useMemo(() => {
     if (activeBadge === "task") {
-      return logs.filter((log) => log.category === "TASK");
+      return logs.filter((log) => log.taskId);
     }
     if (activeBadge === "manual") {
-      return logs.filter((log) => log.category !== "TASK");
+      return logs.filter((log) => !log.taskId);
     }
     return logs;
   }, [activeBadge, logs]);
@@ -300,12 +327,21 @@ export default function ActivityDashboard({
     setLogForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const toggleCategory = (categoryId) => {
+    setLogForm((prev) => {
+      const next = prev.categories.includes(categoryId)
+        ? prev.categories.filter((entry) => entry !== categoryId)
+        : [...prev.categories, categoryId];
+      return { ...prev, categories: next };
+    });
+  };
+
   const openCreateLogModal = () => {
     setLogForm({
-      type: "MANUAL",
-      category: "LEARNING",
+      categories: ["LEARNING"],
       date: formatDateOnly(new Date()),
-      hoursSpent: 1,
+      startTime: "",
+      endTime: "",
       description: "",
       taskId: "",
     });
@@ -316,10 +352,13 @@ export default function ActivityDashboard({
   const openEditLogModal = (log) => {
     setActiveLog(log);
     setLogForm({
-      type: log.type ?? "MANUAL",
-      category: log.category ?? "LEARNING",
+      categories:
+        Array.isArray(log.categories) && log.categories.length
+          ? log.categories
+          : ["OTHER"],
       date: formatDateOnly(log.date),
-      hoursSpent: log.hoursSpent ?? 0,
+      startTime: formatTimeOnly(log.startAt),
+      endTime: formatTimeOnly(log.endAt),
       description: log.description ?? "",
       taskId: log.taskId ?? "",
     });
@@ -333,6 +372,7 @@ export default function ActivityDashboard({
 
   const handleSubmitLog = async (event) => {
     event.preventDefault();
+    const dateBounds = getManualLogDateBounds();
     if (!logForm.description.trim()) {
       addToast({
         title: "Description required",
@@ -341,19 +381,52 @@ export default function ActivityDashboard({
       });
       return;
     }
+    if (!isManualLogDateAllowed(logForm.date, dateBounds)) {
+      addToast({
+        title: "Date not allowed",
+        message:
+          "Manual logs can only be added/edited for today or last 2 days.",
+        variant: "error",
+      });
+      return;
+    }
+    if (!logForm.startTime || !logForm.endTime) {
+      addToast({
+        title: "Time required",
+        message: "Please provide both a start and end time.",
+        variant: "warning",
+      });
+      return;
+    }
+    if (logForm.startTime >= logForm.endTime) {
+      addToast({
+        title: "Invalid time range",
+        message: "End time must be after start time.",
+        variant: "warning",
+      });
+      return;
+    }
+    if (!logForm.categories.length) {
+      addToast({
+        title: "Category required",
+        message: "Select at least one category for the manual log.",
+        variant: "warning",
+      });
+      return;
+    }
     const payload = {
-      type: logForm.type,
       date: logForm.date,
       description: logForm.description,
+      startTime: logForm.startTime,
+      endTime: logForm.endTime,
     };
-    payload.category = logForm.category;
-    payload.hoursSpent = Number(logForm.hoursSpent);
+    payload.categories = logForm.categories;
 
     try {
       const response = await fetch(
         logModal.mode === "edit" && activeLog
-          ? `/api/activity-logs/${activeLog.id}`
-          : "/api/activity-logs",
+          ? `/api/activity/manual/${activeLog.id}`
+          : "/api/activity/manual",
         {
           method: logModal.mode === "edit" ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -538,8 +611,15 @@ export default function ActivityDashboard({
             </div>
           ) : (
             sortedLogs.map((log) => {
-              const isManualLog = log.category !== "TASK";
-              const badgeLabel = log.category;
+              const isManualLog = !log.taskId;
+              const manualCategoryLabels = Array.isArray(log.categories)
+                ? log.categories
+                    .map((category) => manualCategoryLabelMap.get(category) ?? category)
+                    .filter(Boolean)
+                : [];
+              const badgeLabel = isManualLog
+                ? manualCategoryLabels.join(", ") || "Manual"
+                : "TASK";
               const commentCount = isManualLog
                 ? commentCounts[log.id] ?? 0
                 : 0;
@@ -591,7 +671,7 @@ export default function ActivityDashboard({
                       </span>
                       <ActivityMenu
                         onLeaveComment={() => {
-                          if (log.category === "TASK" && log.task) {
+                          if (log.taskId && log.task) {
                             setTaskDrawer({ open: true, task: log.task });
                           } else {
                             openEditLogModal(log);
@@ -613,9 +693,15 @@ export default function ActivityDashboard({
                       Task: {log.task.title}
                     </p>
                   ) : null}
-                  {log.hoursSpent > 0 ? (
+                  {isManualLog && log.startAt && log.endAt ? (
                     <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-                      Hours: {log.hoursSpent}
+                      Time: {formatTimeOnly(log.startAt)} -{" "}
+                      {formatTimeOnly(log.endAt)}
+                    </p>
+                  ) : null}
+                  {isManualLog && manualCategoryLabels.length ? (
+                    <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                      Categories: {manualCategoryLabels.join(", ")}
                     </p>
                   ) : null}
                 </div>
@@ -641,38 +727,25 @@ export default function ActivityDashboard({
         >
           <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1 hide-scrollbar">
             <div className="grid gap-3 lg:grid-cols-4">
-              <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
-                Log type
-                <select
-                  name="type"
-                  value={logForm.type}
-                  onChange={handleLogChange}
-                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
-                >
-                  {logTypeOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
+              <div className="grid gap-2 text-xs text-[color:var(--color-text-muted)] lg:col-span-2">
+                Categories
+                <div className="flex flex-wrap gap-2">
+                  {manualCategories.map((category) => (
+                    <label
+                      key={category.id}
+                      className="flex items-center gap-2 rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-xs text-[color:var(--color-text)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={logForm.categories.includes(category.id)}
+                        onChange={() => toggleCategory(category.id)}
+                        className="h-4 w-4 accent-[color:var(--color-accent)]"
+                      />
+                      <span>{category.label}</span>
+                    </label>
                   ))}
-                </select>
-              </label>
-              {logForm.type === "MANUAL" ? (
-                <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
-                  Category
-                  <select
-                    name="category"
-                    value={logForm.category}
-                    onChange={handleLogChange}
-                    className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
-                  >
-                    {manualCategories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+                </div>
+              </div>
               <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
                 Date
                 <input
@@ -680,17 +753,30 @@ export default function ActivityDashboard({
                   name="date"
                   value={logForm.date}
                   onChange={handleLogChange}
+                  min={getManualLogDateBounds().min}
+                  max={getManualLogDateBounds().max}
+                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                />
+                <span className="text-[11px] text-[color:var(--color-text-subtle)]">
+                  Only today or the last 2 days are allowed.
+                </span>
+              </label>
+              <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+                Start time
+                <input
+                  type="time"
+                  name="startTime"
+                  value={logForm.startTime}
+                  onChange={handleLogChange}
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 />
               </label>
               <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
-                Hours
+                End time
                 <input
-                  type="number"
-                  name="hoursSpent"
-                  min="0"
-                  step="0.25"
-                  value={logForm.hoursSpent}
+                  type="time"
+                  name="endTime"
+                  value={logForm.endTime}
                   onChange={handleLogChange}
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 />
@@ -735,6 +821,7 @@ export default function ActivityDashboard({
               variant="primary"
               type="submit"
               className="min-w-[140px]"
+              disabled={!isManualLogDateAllowed(logForm.date, getManualLogDateBounds())}
             />
           </div>
         </form>

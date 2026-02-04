@@ -33,17 +33,15 @@ enum TaskType {
   CHART
 }
 
-enum ActivityCategory {
-  LEARNING
-  RESEARCH
-  IDLE
-  TASK
-  WFH
-}
-
 enum ActivityLogType {
   MANUAL
   WFH
+}
+
+enum ManualLogCategory {
+  LEARNING
+  RESEARCH
+  OTHER
 }
 
 enum NotificationType {
@@ -241,11 +239,10 @@ model ActivityLog {
   task        Task?            @relation(fields: [taskId], references: [id])
   date        DateTime         @default(now())
   description String
-  hoursSpent  Float
-  category    ActivityCategory @default(TASK)
+  categories  ManualLogCategory[] @default([])
   type        ActivityLogType  @default(MANUAL)
-  startTime   DateTime?
-  endTime     DateTime?
+  startAt     DateTime?
+  endAt       DateTime?
   durationSeconds Int          @default(0)
   workSession TaskWorkSession?
 }
