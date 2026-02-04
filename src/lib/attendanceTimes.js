@@ -11,7 +11,7 @@ function formatDateInput(value) {
   return date.toISOString().slice(0, 10);
 }
 
-function parseTimeString(value) {
+export function parseTimeString(value) {
   if (typeof value !== "string") {
     return null;
   }
@@ -57,6 +57,83 @@ function extractTimeParts(value) {
     seconds: date.getSeconds(),
     milliseconds: date.getMilliseconds(),
   };
+}
+
+export function getTimeZoneParts(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const lookup = parts.reduce((acc, part) => {
+    if (part.type !== "literal") {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
+  if (!lookup.year || !lookup.month || !lookup.day) {
+    return null;
+  }
+  return lookup;
+}
+
+function formatDateParts(parts) {
+  if (!parts?.year || !parts?.month || !parts?.day) {
+    return null;
+  }
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function parseDateInput(value, timeZone = DEFAULT_TIME_ZONE) {
+  if (!value) {
+    return null;
+  }
+  if (typeof value === "string") {
+    const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      return null;
+    }
+    return {
+      year: Number(match[1]),
+      month: Number(match[2]),
+      day: Number(match[3]),
+    };
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const parts = getTimeZoneParts(date, timeZone);
+  if (!parts) {
+    return null;
+  }
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+  };
+}
+
+function getTimeZoneOffset(date, timeZone) {
+  const parts = getTimeZoneParts(date, timeZone);
+  if (!parts) {
+    return 0;
+  }
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  );
+  return asUtc - date.getTime();
 }
 
 export function combineDateAndTime(dateValue, timeValue) {
@@ -122,28 +199,66 @@ export function normalizeWfhInterval({ shiftDate, startTime, endTime }) {
 
 export const DEFAULT_TIME_ZONE = "Asia/Karachi";
 
-function getTimeZoneParts(date, timeZone) {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(date);
-  const lookup = parts.reduce((acc, part) => {
-    if (part.type !== "literal") {
-      acc[part.type] = part.value;
-    }
-    return acc;
-  }, {});
-  if (!lookup.year || !lookup.month || !lookup.day) {
+export function formatDateInTimeZone(value, timeZone = DEFAULT_TIME_ZONE) {
+  if (!value) {
     return null;
   }
-  return lookup;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return formatDateParts(getTimeZoneParts(date, timeZone));
+}
+
+export function formatTimeInTimeZone(value, timeZone = DEFAULT_TIME_ZONE) {
+  if (!value) {
+    return null;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const parts = getTimeZoneParts(date, timeZone);
+  if (!parts) {
+    return null;
+  }
+  return `${parts.hour}:${parts.minute}`;
+}
+
+export function formatDateTimeInTimeZone(value, timeZone = DEFAULT_TIME_ZONE) {
+  if (!value) {
+    return null;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const parts = getTimeZoneParts(date, timeZone);
+  if (!parts) {
+    return null;
+  }
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+export function zonedTimeToUtc({ date, time, timeZone = DEFAULT_TIME_ZONE }) {
+  const dateParts = parseDateInput(date, timeZone);
+  const timeParts = parseTimeString(time);
+  if (!dateParts || !timeParts) {
+    return null;
+  }
+  const utcDate = new Date(
+    Date.UTC(
+      dateParts.year,
+      dateParts.month - 1,
+      dateParts.day,
+      timeParts.hours,
+      timeParts.minutes,
+      timeParts.seconds,
+      timeParts.milliseconds
+    )
+  );
+  const offset = getTimeZoneOffset(utcDate, timeZone);
+  return new Date(utcDate.getTime() - offset);
 }
 
 export function getTimeZoneNow(timeZone = DEFAULT_TIME_ZONE) {

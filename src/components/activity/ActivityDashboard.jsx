@@ -10,6 +10,17 @@ import PageHeader from "@/components/layout/PageHeader";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import AnalyticsResults from "@/components/analytics/AnalyticsResults";
 import ClientOnly from "@/components/ui/ClientOnly";
+import {
+  DEFAULT_TIME_ZONE,
+  formatDateInTimeZone,
+  formatDateTimeInTimeZone,
+  formatTimeInTimeZone,
+} from "@/lib/attendanceTimes";
+import {
+  getManualLogDateBounds,
+  isManualLogDateAllowed,
+  isManualLogInFuture,
+} from "@/lib/manualLogs";
 
 const periodOptions = [
   { id: "daily", label: "Daily" },
@@ -34,44 +45,15 @@ const manualCategoryLabelMap = new Map(
 );
 
 function formatDateTime(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-  return date.toLocaleString();
+  return formatDateTimeInTimeZone(value, DEFAULT_TIME_ZONE) ?? "-";
 }
 
 function formatDateOnly(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  return date.toISOString().slice(0, 10);
+  return formatDateInTimeZone(value, DEFAULT_TIME_ZONE) ?? "";
 }
 
 function formatTimeOnly(value) {
-  if (!value) {
-    return "";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  return date.toISOString().slice(11, 16);
-}
-
-function getManualLogDateBounds(baseDate = new Date()) {
-  const maxDate = formatDateOnly(baseDate);
-  const minDate = new Date(baseDate);
-  minDate.setDate(minDate.getDate() - 2);
-  return { min: formatDateOnly(minDate), max: maxDate };
-}
-
-function isManualLogDateAllowed(dateValue, bounds) {
-  if (!dateValue || !bounds?.min || !bounds?.max) {
-    return false;
-  }
-  return dateValue >= bounds.min && dateValue <= bounds.max;
+  return formatTimeInTimeZone(value, DEFAULT_TIME_ZONE) ?? "";
 }
 
 
@@ -116,11 +98,15 @@ function getAvatarLetter(user) {
   return raw.toString().trim().charAt(0).toUpperCase() || "?";
 }
 
-const ActivityMenu = ({ onLeaveComment }) => {
+const ActivityMenu = ({ items }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
 
   useOutsideClick(menuRef, () => setIsOpen(false), isOpen);
+
+  if (!items?.length) {
+    return null;
+  }
 
   return (
     <div className="relative" ref={menuRef}>
@@ -143,30 +129,22 @@ const ActivityMenu = ({ onLeaveComment }) => {
           className="absolute right-0 z-10 mt-2 w-44 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-xs text-[color:var(--color-text)] shadow-xl"
           onClick={(event) => event.stopPropagation()}
         >
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setIsOpen(false);
-              onLeaveComment();
-            }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsOpen(false);
+                item.onClick?.();
+              }}
+              className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)] ${
+                item.variant === "danger" ? "text-rose-400" : ""
+              }`}
             >
-              <path
-                d="M7 8h10M7 12h7M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-4 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span>Leave Comment</span>
-          </button>
+              <span>{item.label}</span>
+            </button>
+          ))}
         </div>
       ) : null}
     </div>
@@ -194,6 +172,9 @@ export default function ActivityDashboard({
   const [activeLog, setActiveLog] = useState(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const userMenuRef = useRef(null);
+  const categoryMenuRef = useRef(null);
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const [categoryQuery, setCategoryQuery] = useState("");
 
   const [logForm, setLogForm] = useState({
     categories: ["LEARNING"],
@@ -205,6 +186,11 @@ export default function ActivityDashboard({
   });
 
   useOutsideClick(userMenuRef, () => setIsUserMenuOpen(false), isUserMenuOpen);
+  useOutsideClick(
+    categoryMenuRef,
+    () => setIsCategoryMenuOpen(false),
+    isCategoryMenuOpen
+  );
 
   useEffect(() => {
     setIsHydrated(true);
@@ -224,6 +210,16 @@ export default function ActivityDashboard({
         user.email.toLowerCase().includes(query)
     );
   }, [userQuery, users]);
+
+  const filteredCategories = useMemo(() => {
+    const query = categoryQuery.trim().toLowerCase();
+    if (!query) {
+      return manualCategories;
+    }
+    return manualCategories.filter((category) =>
+      category.label.toLowerCase().includes(query)
+    );
+  }, [categoryQuery]);
 
   const fetchLogs = async ({ targetUserId } = {}) => {
     setStatus({ loading: true, error: null });
@@ -346,6 +342,7 @@ export default function ActivityDashboard({
       taskId: "",
     });
     setActiveLog(null);
+    setCategoryQuery("");
     setLogModal({ open: true, mode: "create" });
   };
 
@@ -362,31 +359,54 @@ export default function ActivityDashboard({
       description: log.description ?? "",
       taskId: log.taskId ?? "",
     });
+    setCategoryQuery("");
     setLogModal({ open: true, mode: "edit" });
   };
 
   const closeLogModal = () => {
     setLogModal({ open: false, mode: "create" });
     setActiveLog(null);
+    setIsCategoryMenuOpen(false);
+    setCategoryQuery("");
+  };
+
+  const handleDeleteLog = async (log) => {
+    if (!log?.id) {
+      return;
+    }
+    try {
+      const response = await fetch(`/api/activity-logs/${log.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Unable to delete activity log.");
+      }
+      addToast({
+        title: "Log deleted",
+        message: "Manual activity removed.",
+        variant: "success",
+      });
+      await fetchLogs({ targetUserId: selectedUser?.id ?? "" });
+    } catch (error) {
+      addToast({
+        title: "Delete failed",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to delete activity log.",
+        variant: "error",
+      });
+    }
   };
 
   const handleSubmitLog = async (event) => {
     event.preventDefault();
-    const dateBounds = getManualLogDateBounds();
     if (!logForm.description.trim()) {
       addToast({
         title: "Description required",
         message: "Please enter a summary before saving the log.",
         variant: "warning",
-      });
-      return;
-    }
-    if (!isManualLogDateAllowed(logForm.date, dateBounds)) {
-      addToast({
-        title: "Date not allowed",
-        message:
-          "Manual logs can only be added/edited for today or last 2 days.",
-        variant: "error",
       });
       return;
     }
@@ -403,6 +423,29 @@ export default function ActivityDashboard({
         title: "Invalid time range",
         message: "End time must be after start time.",
         variant: "warning",
+      });
+      return;
+    }
+    if (
+      isManualLogInFuture({
+        date: logForm.date,
+        startTime: logForm.startTime,
+        endTime: logForm.endTime,
+      })
+    ) {
+      addToast({
+        title: "Future time not allowed",
+        message: "Manual logs cannot be in the future.",
+        variant: "error",
+      });
+      return;
+    }
+    if (!isManualLogDateAllowed(logForm.date)) {
+      addToast({
+        title: "Date not allowed",
+        message:
+          "Manual logs can only be added/edited for today or last 2 days.",
+        variant: "error",
       });
       return;
     }
@@ -458,6 +501,8 @@ export default function ActivityDashboard({
       });
     }
   };
+
+  const dateBounds = getManualLogDateBounds();
 
   return (
     <div className="space-y-6">
@@ -670,13 +715,33 @@ export default function ActivityDashboard({
                         {badgeLabel}
                       </span>
                       <ActivityMenu
-                        onLeaveComment={() => {
-                          if (log.taskId && log.task) {
-                            setTaskDrawer({ open: true, task: log.task });
-                          } else {
-                            openEditLogModal(log);
-                          }
-                        }}
+                        items={
+                          isManualLog
+                            ? [
+                                {
+                                  label: "Edit",
+                                  onClick: () => openEditLogModal(log),
+                                },
+                                {
+                                  label: "Delete",
+                                  onClick: () => handleDeleteLog(log),
+                                  variant: "danger",
+                                },
+                              ]
+                            : [
+                                {
+                                  label: "Leave Comment",
+                                  onClick: () => {
+                                    if (log.taskId && log.task) {
+                                      setTaskDrawer({
+                                        open: true,
+                                        task: log.task,
+                                      });
+                                    }
+                                  },
+                                },
+                              ]
+                        }
                       />
                     </div>
                   </div>
@@ -723,27 +788,88 @@ export default function ActivityDashboard({
       >
         <form
           onSubmit={handleSubmitLog}
-          className="flex h-full flex-col"
+          className="flex min-h-0 flex-1 flex-col"
         >
           <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1 hide-scrollbar">
             <div className="grid gap-3 lg:grid-cols-4">
-              <div className="grid gap-2 text-xs text-[color:var(--color-text-muted)] lg:col-span-2">
+              <div
+                className="grid gap-2 text-xs text-[color:var(--color-text-muted)] lg:col-span-2"
+                ref={categoryMenuRef}
+              >
                 Categories
-                <div className="flex flex-wrap gap-2">
-                  {manualCategories.map((category) => (
-                    <label
-                      key={category.id}
-                      className="flex items-center gap-2 rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-xs text-[color:var(--color-text)]"
-                    >
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryMenuOpen((prev) => !prev)}
+                    className="flex min-h-[42px] w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-left text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
+                    aria-expanded={isCategoryMenuOpen}
+                    aria-haspopup="listbox"
+                  >
+                    <div className="flex flex-wrap gap-2">
+                      {logForm.categories.length ? (
+                        logForm.categories.map((category) => (
+                          <span
+                            key={category}
+                            className="rounded-full bg-[color:var(--color-accent-muted)] px-2 py-1 text-[11px] font-semibold text-[color:var(--color-accent)]"
+                          >
+                            {manualCategoryLabelMap.get(category) ?? category}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[color:var(--color-text-subtle)]">
+                          Select categories
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-[color:var(--color-text-muted)]">
+                      ▾
+                    </span>
+                  </button>
+                  {isCategoryMenuOpen ? (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 shadow-xl">
                       <input
-                        type="checkbox"
-                        checked={logForm.categories.includes(category.id)}
-                        onChange={() => toggleCategory(category.id)}
-                        className="h-4 w-4 accent-[color:var(--color-accent)]"
+                        type="text"
+                        value={categoryQuery}
+                        onChange={(event) => setCategoryQuery(event.target.value)}
+                        placeholder="Search categories"
+                        className="mb-2 w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-xs text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                       />
-                      <span>{category.label}</span>
-                    </label>
-                  ))}
+                      <div className="max-h-40 space-y-1 overflow-y-auto pr-1 hide-scrollbar">
+                        {filteredCategories.length ? (
+                          filteredCategories.map((category) => {
+                            const isSelected = logForm.categories.includes(
+                              category.id
+                            );
+                            return (
+                              <button
+                                key={category.id}
+                                type="button"
+                                onClick={() => toggleCategory(category.id)}
+                                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${
+                                  isSelected
+                                    ? "bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent)]"
+                                    : "text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
+                                }`}
+                                role="option"
+                                aria-selected={isSelected}
+                              >
+                                <span>{category.label}</span>
+                                {isSelected ? (
+                                  <span className="text-[10px] font-semibold">
+                                    Selected
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <p className="px-3 py-2 text-xs text-[color:var(--color-text-subtle)]">
+                            No categories found.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
@@ -753,8 +879,8 @@ export default function ActivityDashboard({
                   name="date"
                   value={logForm.date}
                   onChange={handleLogChange}
-                  min={getManualLogDateBounds().min}
-                  max={getManualLogDateBounds().max}
+                  min={dateBounds.min ?? undefined}
+                  max={dateBounds.max ?? undefined}
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 />
                 <span className="text-[11px] text-[color:var(--color-text-subtle)]">
@@ -768,6 +894,11 @@ export default function ActivityDashboard({
                   name="startTime"
                   value={logForm.startTime}
                   onChange={handleLogChange}
+                  max={
+                    logForm.date === formatDateOnly(new Date())
+                      ? formatTimeOnly(new Date())
+                      : undefined
+                  }
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 />
               </label>
@@ -778,6 +909,11 @@ export default function ActivityDashboard({
                   name="endTime"
                   value={logForm.endTime}
                   onChange={handleLogChange}
+                  max={
+                    logForm.date === formatDateOnly(new Date())
+                      ? formatTimeOnly(new Date())
+                      : undefined
+                  }
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 />
               </label>
@@ -821,7 +957,7 @@ export default function ActivityDashboard({
               variant="primary"
               type="submit"
               className="min-w-[140px]"
-              disabled={!isManualLogDateAllowed(logForm.date, getManualLogDateBounds())}
+              disabled={!isManualLogDateAllowed(logForm.date)}
             />
           </div>
         </form>

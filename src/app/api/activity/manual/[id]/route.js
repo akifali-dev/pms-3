@@ -7,6 +7,8 @@ import {
 } from "@/lib/api";
 import {
   buildManualLogTimes,
+  buildManualLogDate,
+  isManualLogInFuture,
   isManualLogDateAllowed,
   MANUAL_LOG_CATEGORIES,
   normalizeManualCategories,
@@ -49,20 +51,33 @@ export async function PATCH(request, { params }) {
 
   const body = await request.json();
   const updates = {};
-  const targetDate = body?.date ? new Date(body.date) : log.date;
+  const targetDateInput = body?.date ?? log.date;
+  const targetDate = buildManualLogDate(targetDateInput);
 
   if (body?.description) {
     updates.description = body.description.trim();
   }
 
   if (body?.date) {
-    if (Number.isNaN(targetDate.getTime())) {
+    if (!targetDate) {
       return buildError("Date must be valid.", 400);
     }
     updates.date = targetDate;
   }
 
-  if (!isManualLogDateAllowed(targetDate)) {
+  const hasTimeUpdate = body?.startTime || body?.endTime || body?.date;
+  if (
+    hasTimeUpdate &&
+    isManualLogInFuture({
+      date: targetDateInput,
+      startTime: body.startTime,
+      endTime: body.endTime,
+    })
+  ) {
+    return buildError("Manual logs cannot be in the future.", 400);
+  }
+
+  if (!isManualLogDateAllowed(targetDateInput)) {
     return buildError(
       "Manual logs can only be added/edited for today or last 2 days.",
       403
@@ -82,14 +97,13 @@ export async function PATCH(request, { params }) {
     updates.categories = categories;
   }
 
-  const hasTimeUpdate = body?.startTime || body?.endTime || body?.date;
   if (hasTimeUpdate) {
     if (!body?.startTime || !body?.endTime) {
       return buildError("Start and end time are required.", 400);
     }
     const { startAt, endAt, durationSeconds, error: timeError } =
       buildManualLogTimes({
-        date: targetDate,
+        date: targetDateInput,
         startTime: body.startTime,
         endTime: body.endTime,
       });
