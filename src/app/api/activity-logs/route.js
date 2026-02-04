@@ -10,6 +10,8 @@ import {
 import { createNotification, getTaskMemberIds } from "@/lib/notifications";
 import {
   buildManualLogTimes,
+  buildManualLogDate,
+  isManualLogInFuture,
   isManualLogDateAllowed,
   MANUAL_LOG_CATEGORIES,
   normalizeManualCategories,
@@ -105,7 +107,7 @@ export async function POST(request) {
   const description = body?.description?.trim();
   const taskId = body?.taskId ?? null;
   const rawCategories = body?.categories;
-  const date = body?.date ? new Date(body.date) : new Date();
+  const dateInput = body?.date ?? new Date();
   const startTime = body?.startTime;
   const endTime = body?.endTime;
 
@@ -113,11 +115,16 @@ export async function POST(request) {
     return buildError("Description is required.", 400);
   }
 
-  if (Number.isNaN(date.getTime())) {
+  const date = buildManualLogDate(dateInput);
+  if (!date) {
     return buildError("Date must be valid.", 400);
   }
 
-  if (!isManualLogDateAllowed(date)) {
+  if (isManualLogInFuture({ date: dateInput, startTime, endTime })) {
+    return buildError("Manual logs cannot be in the future.", 400);
+  }
+
+  if (!isManualLogDateAllowed(dateInput)) {
     return buildError(
       "Manual logs can only be added/edited for today or last 2 days.",
       403
@@ -135,7 +142,7 @@ export async function POST(request) {
   }
 
   const { startAt, endAt, durationSeconds, error: timeError } =
-    buildManualLogTimes({ date, startTime, endTime });
+    buildManualLogTimes({ date: dateInput, startTime, endTime });
   if (timeError) {
     return buildError(timeError, 400);
   }
