@@ -12,6 +12,8 @@ import {
   createNotification,
   getLeadershipUserIds,
 } from "@/lib/notifications";
+import { getDutyDate } from "@/lib/dutyHours";
+import { getTimeZoneNow } from "@/lib/attendanceTimes";
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -91,6 +93,21 @@ function getActiveTimeLog(task) {
   return task?.timeLogs?.find((log) => !log.endedAt) ?? null;
 }
 
+function getDutyDateBounds(dutyDate) {
+  if (!dutyDate) {
+    return null;
+  }
+  const parsed = new Date(dutyDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  const start = new Date(parsed);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(parsed);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
 export async function PATCH(request, { params }) {
   const { id: taskId } = await params;
 
@@ -165,13 +182,43 @@ export async function PATCH(request, { params }) {
     updates.reworkCount = task.reworkCount + 1;
   }
 
+  const now = getTimeZoneNow();
+  const shouldTrackWork = ["IN_PROGRESS", "DEV_TEST"].includes(nextStatus);
+  if (shouldTrackWork) {
+    const dutyDate = getDutyDate(now);
+    const bounds = getDutyDateBounds(dutyDate);
+    if (!bounds) {
+      return buildError("Unable to determine duty date.", 400);
+    }
+    const attendance = await prisma.attendance.findFirst({
+      where: {
+        userId: task.ownerId,
+        date: { gte: bounds.start, lte: bounds.end },
+      },
+      select: { inTime: true, outTime: true },
+    });
+    if (!attendance?.inTime) {
+      return buildError("You’re off duty. Start your duty to move tasks.", 403);
+    }
+    const inTime = new Date(attendance.inTime);
+    if (Number.isNaN(inTime.getTime()) || inTime > now) {
+      return buildError("You’re off duty. Start your duty to move tasks.", 403);
+    }
+    if (attendance.outTime) {
+      const outTime = new Date(attendance.outTime);
+      if (!Number.isNaN(outTime.getTime()) && outTime <= now) {
+        return buildError(
+          "Your duty has ended. Start a new duty to move tasks.",
+          403
+        );
+      }
+    }
+  }
+
   let updated;
   let offDutyWarning = null;
   try {
     updated = await prisma.$transaction(async (tx) => {
-      const now = new Date();
-      const shouldTrackWork = ["IN_PROGRESS", "DEV_TEST"].includes(nextStatus);
-
       const currentTask = await tx.task.findUnique({
         where: { id: taskId },
         select: {

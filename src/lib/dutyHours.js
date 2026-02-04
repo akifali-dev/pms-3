@@ -1,5 +1,52 @@
 export const SHIFT_DAY_START_HOUR = 11;
 export const SHIFT_DAY_END_HOUR = 3;
+const DEFAULT_TIME_ZONE = "Asia/Karachi";
+
+function getTimeZoneParts(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const lookup = parts.reduce((acc, part) => {
+    if (part.type !== "literal") {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
+  if (!lookup.year || !lookup.month || !lookup.day) {
+    return null;
+  }
+  return lookup;
+}
+
+export function getDutyDate(now = new Date(), timeZone = DEFAULT_TIME_ZONE) {
+  const base = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(base.getTime())) {
+    return null;
+  }
+  const parts = getTimeZoneParts(base, timeZone);
+  if (!parts) {
+    return null;
+  }
+  const hour = Number(parts.hour);
+  if (Number.isNaN(hour)) {
+    return null;
+  }
+  const dutyDate = new Date(
+    Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day))
+  );
+  if (hour < SHIFT_DAY_START_HOUR) {
+    dutyDate.setUTCDate(dutyDate.getUTCDate() - 1);
+  }
+  return dutyDate.toISOString().slice(0, 10);
+}
 
 export function getDayBounds(date) {
   const base = date instanceof Date ? new Date(date) : new Date(date);
@@ -228,7 +275,11 @@ export async function getUserPresenceNow(prismaClient, userId, now = new Date())
   if (!prismaClient || !userId) {
     return { status: "OFF_DUTY", dutyWindowInfo: null };
   }
-  const intervals = await getDutyIntervals(prismaClient, userId, now, now);
+  const dutyDate = getDutyDate(now);
+  const dutyDateValue = dutyDate ? new Date(dutyDate) : null;
+  const presenceDate =
+    dutyDateValue && !Number.isNaN(dutyDateValue.getTime()) ? dutyDateValue : now;
+  const intervals = await getDutyIntervals(prismaClient, userId, presenceDate, now);
   return getPresenceFromIntervals(intervals, now);
 }
 
@@ -301,20 +352,36 @@ export async function getDutyIntervalsForRange(
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     return [];
   }
-  const startDay = new Date(
-    Date.UTC(
-      startDate.getUTCFullYear(),
-      startDate.getUTCMonth(),
-      startDate.getUTCDate()
-    )
-  );
-  const endDay = new Date(
-    Date.UTC(
-      endDate.getUTCFullYear(),
-      endDate.getUTCMonth(),
-      endDate.getUTCDate()
-    )
-  );
+  const startDutyDate = getDutyDate(startDate);
+  const endDutyDate = getDutyDate(endDate);
+  let startDay = startDutyDate ? new Date(startDutyDate) : null;
+  let endDay = endDutyDate ? new Date(endDutyDate) : null;
+  if (
+    !startDay ||
+    !endDay ||
+    Number.isNaN(startDay.getTime()) ||
+    Number.isNaN(endDay.getTime())
+  ) {
+    startDay = new Date(
+      Date.UTC(
+        startDate.getUTCFullYear(),
+        startDate.getUTCMonth(),
+        startDate.getUTCDate()
+      )
+    );
+    endDay = new Date(
+      Date.UTC(
+        endDate.getUTCFullYear(),
+        endDate.getUTCMonth(),
+        endDate.getUTCDate()
+      )
+    );
+  }
+  if (startDay > endDay) {
+    const swap = startDay;
+    startDay = endDay;
+    endDay = swap;
+  }
   const attendances = await prismaClient.attendance.findMany({
     where: {
       userId,

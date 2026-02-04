@@ -1,12 +1,17 @@
 import { sumBreakSeconds } from "@/lib/timeLogs";
 import {
   findDutyWindowForTime,
+  getDutyDate,
   getCutoffTime,
   getDutyWindows,
 } from "@/lib/dutyHours";
 
 export async function getOnDutyStatus(prismaClient, userId, time = new Date()) {
-  const windows = await getDutyWindows(prismaClient, userId, time);
+  const dutyDate = getDutyDate(time);
+  const dutyDateValue = dutyDate ? new Date(dutyDate) : null;
+  const windowDate =
+    dutyDateValue && !Number.isNaN(dutyDateValue.getTime()) ? dutyDateValue : time;
+  const windows = await getDutyWindows(prismaClient, userId, windowDate, time);
   const activeWindow = findDutyWindowForTime(windows, time);
   return {
     windows,
@@ -158,7 +163,13 @@ export async function endSessionsPastCutoff(prismaClient, userId, now = new Date
 
   const ended = [];
   for (const session of activeSessions) {
-    const windows = await getDutyWindows(prismaClient, userId, session.startedAt);
+    const dutyDate = getDutyDate(session.startedAt);
+    const dutyDateValue = dutyDate ? new Date(dutyDate) : null;
+    const windowDate =
+      dutyDateValue && !Number.isNaN(dutyDateValue.getTime())
+        ? dutyDateValue
+        : session.startedAt;
+    const windows = await getDutyWindows(prismaClient, userId, windowDate, session.startedAt);
     const activeWindow = findDutyWindowForTime(windows, session.startedAt);
     const fallbackCutoff = getCutoffTime(session.startedAt);
     const windowEnd = activeWindow?.end ?? fallbackCutoff;
@@ -187,7 +198,13 @@ export async function clampSessionEndToDutyWindow(
   sessionStart,
   proposedEnd
 ) {
-  const windows = await getDutyWindows(prismaClient, userId, sessionStart);
+  const dutyDate = getDutyDate(sessionStart);
+  const dutyDateValue = dutyDate ? new Date(dutyDate) : null;
+  const windowDate =
+    dutyDateValue && !Number.isNaN(dutyDateValue.getTime())
+      ? dutyDateValue
+      : sessionStart;
+  const windows = await getDutyWindows(prismaClient, userId, windowDate, sessionStart);
   const window = findDutyWindowForTime(windows, sessionStart);
   if (!window) {
     return proposedEnd;
