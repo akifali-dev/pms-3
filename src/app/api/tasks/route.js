@@ -279,8 +279,6 @@ export async function POST(request) {
       data: {
         userId: task.ownerId,
         taskId: task.id,
-        category: "TASK",
-        hoursSpent: 0,
         description: `Task created: ${task.title} (${status}).`,
       },
     });

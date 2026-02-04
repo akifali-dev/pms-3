@@ -9,6 +9,12 @@ import {
   getAuthContext,
   isAdminRole,
 } from "@/lib/api";
+import {
+  buildManualLogTimes,
+  isManualLogDateAllowed,
+  MANUAL_LOG_CATEGORIES,
+  normalizeManualCategories,
+} from "@/lib/manualLogs";
 
 async function getActivityLog(logId) {
   return prisma.activityLog.findUnique({
@@ -29,6 +35,13 @@ function canAccessLog(context, log) {
     return true;
   }
 
+  return log.userId === context.user.id;
+}
+
+function canEditManualLog(context, log) {
+  if (!log) {
+    return false;
+  }
   return log.userId === context.user.id;
 }
 
@@ -79,35 +92,63 @@ export async function PATCH(request, { params }) {
 
   const body = await request.json();
   const updates = {};
+  const isManualLog = !log.taskId;
+  const targetDate = body?.date ? new Date(body.date) : log.date;
 
   if (body?.description) {
     updates.description = body.description.trim();
   }
 
   if (body?.date) {
-    const parsedDate = new Date(body.date);
-    if (Number.isNaN(parsedDate.getTime())) {
+    if (Number.isNaN(targetDate.getTime())) {
       return buildError("Date must be valid.", 400);
     }
-    updates.date = parsedDate;
+    updates.date = targetDate;
   }
 
-  if (typeof body?.hoursSpent === "number") {
-    if (body.hoursSpent < 0) {
-      return buildError("Hours spent must be a valid number.", 400);
+  if (isManualLog) {
+    if (!canEditManualLog(context, log)) {
+      return buildError("You do not have permission to update this log.", 403);
     }
-    updates.hoursSpent = body.hoursSpent;
-  }
 
-  if (body?.category) {
-    const category = body.category.toString().trim().toUpperCase();
-    if (!["LEARNING", "RESEARCH", "IDLE"].includes(category)) {
+    if (!isManualLogDateAllowed(targetDate)) {
       return buildError(
-        "Category must be one of: learning, research, idle.",
-        400
+        "Manual logs can only be added/edited for today or last 2 days.",
+        403
       );
     }
-    updates.category = category;
+
+    if (body?.categories) {
+      const categories = normalizeManualCategories(body.categories);
+      if (!categories) {
+        return buildError(
+          `Categories must include at least one of: ${MANUAL_LOG_CATEGORIES.join(
+            ", "
+          ).toLowerCase()}.`,
+          400
+        );
+      }
+      updates.categories = categories;
+    }
+
+    const hasTimeUpdate = body?.startTime || body?.endTime || body?.date;
+    if (hasTimeUpdate) {
+      if (!body?.startTime || !body?.endTime) {
+        return buildError("Start and end time are required.", 400);
+      }
+      const { startAt, endAt, durationSeconds, error: timeError } =
+        buildManualLogTimes({
+          date: targetDate,
+          startTime: body.startTime,
+          endTime: body.endTime,
+        });
+      if (timeError) {
+        return buildError(timeError, 400);
+      }
+      updates.startAt = startAt;
+      updates.endAt = endAt;
+      updates.durationSeconds = durationSeconds;
+    }
   }
 
   if (Object.keys(updates).length === 0) {

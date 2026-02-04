@@ -233,8 +233,6 @@ export async function PATCH(request, { params }) {
         data: {
           userId: task.ownerId,
           taskId,
-          category: "TASK",
-          hoursSpent: 0,
           description: `Task status updated by ${actorName}: ${task.title} moved from ${task.status ?? "new"} to ${nextStatus}.`,
         },
       });
