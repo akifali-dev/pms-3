@@ -791,9 +791,9 @@ export default function ActivityDashboard({
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1 hide-scrollbar">
-            <div className="grid gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3  ">
               <div
-                className="grid gap-2 text-xs text-[color:var(--color-text-muted)] lg:col-span-2"
+                className="flex flex-col gap-1 text-xs text-[color:var(--color-text-muted)] sm:col-span-2"
                 ref={categoryMenuRef}
               >
                 Categories
@@ -872,7 +872,7 @@ export default function ActivityDashboard({
                   ) : null}
                 </div>
               </div>
-              <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+              <label className="flex flex-col gap-1 text-xs text-[color:var(--color-text-muted)]">
                 Date
                 <input
                   type="date"
@@ -881,11 +881,11 @@ export default function ActivityDashboard({
                   onChange={handleLogChange}
                   min={dateBounds.min ?? undefined}
                   max={dateBounds.max ?? undefined}
-                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
-                />
-                <span className="text-[11px] text-[color:var(--color-text-subtle)]">
-                  Only today or the last 2 days are allowed.
-                </span>
+                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm"
+  />
+                <span className="min-h-[14px] text-[11px] text-[color:var(--color-text-subtle)]">
+    Only today or the last 2 days are allowed.
+  </span>
               </label>
               <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
                 Start time

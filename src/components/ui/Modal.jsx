@@ -25,13 +25,16 @@ export default function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 ">
       <div
-        className="absolute inset-0 bg-[color:var(--color-overlay)] backdrop-blur"
+        className="absolute inset-0 bg-[color:var(--color-overlay)] backdrop-blur "
         onClick={onClose}
         role="presentation"
       />
-      <div className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 shadow-2xl max-h-[80vh] min-h-0">
+      <div className="relative z-10 flex w-full max-w-lg flex-col overflow-y-auto  rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-6 pt-6  shadow-2xl max-h-[80vh] min-h-0
+      [-ms-overflow-style:none]
+  [scrollbar-width:none]
+  [&::-webkit-scrollbar]:hidden ">
         <div className="space-y-2">
           <h3 className="text-lg font-semibold text-[color:var(--color-text)]">
             {title}
