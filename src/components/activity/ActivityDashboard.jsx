@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import PageHeader from "@/components/layout/PageHeader";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import AnalyticsResults from "@/components/analytics/AnalyticsResults";
+import DailyTimelineChart from "@/components/analytics/DailyTimelineChart";
 import ClientOnly from "@/components/ui/ClientOnly";
 import {
   DEFAULT_TIME_ZONE,
@@ -644,6 +645,16 @@ export default function ActivityDashboard({
               </div>
             }
           >
+            {period === "daily" ? (
+              <div className="mb-4">
+                <DailyTimelineChart
+                  date={selectedDate}
+                  userId={selectedUser?.id ?? null}
+                  showNames={isManager}
+                  title="Daily working timeline"
+                />
+              </div>
+            ) : null}
             <AnalyticsResults
               period={period}
               date={selectedDate}

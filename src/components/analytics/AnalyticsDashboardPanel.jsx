@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import useOutsideClick from "@/hooks/useOutsideClick";
+import DailyTimelineChart from "@/components/analytics/DailyTimelineChart";
+import { DEFAULT_TIME_ZONE, formatDateInTimeZone } from "@/lib/attendanceTimes";
 
 const periodOptions = [
   { id: "daily", label: "Daily" },
@@ -23,11 +25,7 @@ const AnalyticsResults = dynamic(
 );
 
 function formatDateOnly(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  return date.toISOString().slice(0, 10);
+  return formatDateInTimeZone(value, DEFAULT_TIME_ZONE) ?? "";
 }
 
 export default function AnalyticsDashboardPanel({ users, currentUser, isManager }) {
@@ -140,6 +138,15 @@ export default function AnalyticsDashboardPanel({ users, currentUser, isManager 
           </div>
         ) : null}
       </div>
+
+      {period === "daily" ? (
+        <DailyTimelineChart
+          date={selectedDate}
+          userId={activeUserId}
+          showNames={isManager}
+          title="Daily working timeline"
+        />
+      ) : null}
 
       <AnalyticsResults period={period} date={selectedDate} userId={activeUserId} />
     </div>

@@ -21,6 +21,7 @@
   --color-accent-muted: #dbeafe;
   --color-overlay: rgba(15, 23, 42, 0.45);
   --color-work: #16a34a;
+  --color-work-manual: #10b981;
   --color-idle: #dc2626;
   --color-break: #f59e0b;
   --color-off-duty: #94a3b8;
@@ -54,6 +55,7 @@
   --color-accent-muted: rgba(56, 189, 248, 0.18);
   --color-overlay: rgba(2, 6, 23, 0.7);
   --color-work: #22c55e;
+  --color-work-manual: #34d399;
   --color-idle: #f87171;
   --color-break: #fbbf24;
   --color-off-duty: rgba(148, 163, 184, 0.65);
