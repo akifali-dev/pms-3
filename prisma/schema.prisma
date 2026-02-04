@@ -65,6 +65,7 @@ enum TaskTimeRequestStatus {
 
 enum TaskBreakReason {
   NAMAZ
+  LUNCH
   MEAL
   REFRESHMENT
   OTHER

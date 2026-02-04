@@ -54,6 +54,22 @@ function formatDuration(startAt, endAt) {
   return `${remainder}m`;
 }
 
+function formatBreakReason(reason) {
+  if (!reason) {
+    return "Other";
+  }
+  const value = reason.toString().toLowerCase();
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function buildBreakLabel(segment) {
+  const reason = formatBreakReason(segment.breakReason);
+  if (segment.breakType === "TASK_PAUSE") {
+    return `Break (Task Pause) \u2013 ${reason}`;
+  }
+  return segment.breakReason ? `Break (${reason})` : "Break";
+}
+
 function getWidthPercent(range, start, end) {
   const total = range.end.getTime() - range.start.getTime();
   if (total <= 0) {
@@ -65,12 +81,14 @@ function getWidthPercent(range, start, end) {
 }
 
 function buildTooltip(segment) {
-  const typeLabel = SEGMENT_LABELS[segment.type] ?? segment.type;
+  const typeLabel =
+    segment.type === "BREAK"
+      ? buildBreakLabel(segment)
+      : SEGMENT_LABELS[segment.type] ?? segment.type;
   const timeRange = `${formatTime(segment.startAt)} - ${formatTime(segment.endAt)}`;
   const duration = formatDuration(segment.startAt, segment.endAt);
-  const breakInfo = segment.breakType ? ` (${segment.breakType})` : "";
   const wfhFlag = segment.isWFH ? " • WFH" : "";
-  return `${typeLabel}${breakInfo} | ${timeRange} | ${duration}${wfhFlag}`;
+  return `${typeLabel} | ${timeRange} | ${duration}${wfhFlag}`;
 }
 
 export default function DailyTimelineChart({

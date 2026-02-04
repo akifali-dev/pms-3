@@ -39,6 +39,8 @@ const formatBreakReason = (reason) => {
   switch (reason) {
     case "NAMAZ":
       return "Namaz";
+    case "LUNCH":
+      return "Lunch";
     case "MEAL":
       return "Meal";
     case "REFRESHMENT":
@@ -1327,6 +1329,7 @@ export default function TaskBoard({
                         className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
                       >
                         <option value="NAMAZ">Namaz</option>
+                        <option value="LUNCH">Lunch</option>
                         <option value="MEAL">Meal</option>
                         <option value="REFRESHMENT">Refreshment</option>
                         <option value="OTHER">Other</option>

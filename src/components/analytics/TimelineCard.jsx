@@ -40,6 +40,22 @@ function getTimeLabel(date) {
   return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatBreakReason(reason) {
+  if (!reason) {
+    return "Other";
+  }
+  const value = reason.toString().toLowerCase();
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function buildBreakLabel(segment) {
+  const reason = formatBreakReason(segment.reason);
+  if (segment.breakType === "TASK_PAUSE") {
+    return `Break (Task Pause) \u2013 ${reason}`;
+  }
+  return segment.reason ? `Break (${reason})` : "Break";
+}
+
 function buildRange(dayWindowStart, dayWindowEnd, dutyWindows) {
   if (dayWindowStart && dayWindowEnd) {
     const start = new Date(dayWindowStart);
@@ -197,25 +213,29 @@ export default function TimelineCard({ user, timeline }) {
                 }}
               />
             ))}
-            {markers.map((segment) => (
-              <div
-                key={`${segment.type}-${segment.startAt}-${segment.endAt}`}
-                className="absolute top-0 h-full rounded-none"
-                style={{
-                  left: `${segment.left}%`,
-                  width: `${segment.width}%`,
-                  background: SEGMENT_COLORS[segment.type] ?? "var(--color-off-duty)",
-                  boxShadow: segment.isWFH
-                    ? "inset 0 0 0 1px rgba(14,165,233,0.45)"
-                    : "none",
-                }}
-                title={`${segment.type} ${getTimeLabel(segment.startAt)} - ${getTimeLabel(
-                  segment.endAt
-                )}${segment.reason ? ` (${segment.reason})` : ""}${
-                  segment.isWFH ? " • WFH" : ""
-                }`}
-              />
-            ))}
+            {markers.map((segment) => {
+              const breakLabel =
+                segment.type === "BREAK" ? buildBreakLabel(segment) : null;
+              return (
+                <div
+                  key={`${segment.type}-${segment.startAt}-${segment.endAt}`}
+                  className="absolute top-0 h-full rounded-none"
+                  style={{
+                    left: `${segment.left}%`,
+                    width: `${segment.width}%`,
+                    background: SEGMENT_COLORS[segment.type] ?? "var(--color-off-duty)",
+                    boxShadow: segment.isWFH
+                      ? "inset 0 0 0 1px rgba(14,165,233,0.45)"
+                      : "none",
+                  }}
+                  title={`${
+                    breakLabel ?? segment.type
+                  } ${getTimeLabel(segment.startAt)} - ${getTimeLabel(segment.endAt)}${
+                    segment.isWFH ? " • WFH" : ""
+                  }`}
+                />
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4 text-sm text-[color:var(--color-text-subtle)]">

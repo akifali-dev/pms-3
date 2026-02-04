@@ -8,7 +8,7 @@ import {
 } from "@/lib/api";
 
 const ALLOWED_STATUSES = ["IN_PROGRESS", "DEV_TEST"];
-const BREAK_REASONS = ["NAMAZ", "MEAL", "REFRESHMENT", "OTHER"];
+const BREAK_REASONS = ["NAMAZ", "LUNCH", "MEAL", "REFRESHMENT", "OTHER"];
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
