@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import NotificationDrawer from "@/components/notifications/NotificationDrawer";
 import RouteProgress from "@/components/layout/RouteProgress";
+import FloatingTaskTimer from "@/components/layout/FloatingTaskTimer";
 import {
   NotificationCountsProvider,
   useNotificationCounts,
@@ -192,6 +193,7 @@ function AppShellContent({ children, session }) {
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
       />
+      <FloatingTaskTimer session={session} />
     </div>
   );
 }
