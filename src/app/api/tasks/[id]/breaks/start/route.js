@@ -8,7 +8,14 @@ import {
 } from "@/lib/api";
 
 const ALLOWED_STATUSES = ["IN_PROGRESS", "DEV_TEST"];
-const BREAK_REASONS = ["NAMAZ", "LUNCH", "MEAL", "REFRESHMENT", "OTHER"];
+const BREAK_REASONS = [
+  "NAMAZ",
+  "LUNCH",
+  "MEAL",
+  "DINNER",
+  "REFRESHMENT",
+  "OTHER",
+];
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -65,6 +72,8 @@ export async function POST(request, { params }) {
     return buildError("Break reason is required.", 400);
   }
 
+  const normalizedReason = reason === "DINNER" ? "MEAL" : reason;
+
   const existingBreak = await prisma.taskBreak.findFirst({
     where: { taskId, userId: context.user.id, endedAt: null },
     orderBy: { startedAt: "desc" },
@@ -78,7 +87,7 @@ export async function POST(request, { params }) {
     data: {
       taskId,
       userId: context.user.id,
-      reason,
+      reason: normalizedReason,
       note: note || null,
       startedAt: new Date(),
       endedAt: null
