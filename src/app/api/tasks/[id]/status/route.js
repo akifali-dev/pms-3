@@ -14,6 +14,12 @@ import {
 } from "@/lib/notifications";
 import { getDutyDate } from "@/lib/dutyHours";
 import { getTimeZoneNow } from "@/lib/attendanceTimes";
+import {
+  endActiveSessionsAtTime,
+  endWorkSession,
+} from "@/lib/taskWorkSessions";
+
+const ACTIVE_WORK_STATUSES = new Set(["IN_PROGRESS", "DEV_TEST"]);
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -183,7 +189,8 @@ export async function PATCH(request, { params }) {
   }
 
   const now = getTimeZoneNow();
-  const shouldTrackWork = ["IN_PROGRESS", "DEV_TEST"].includes(nextStatus);
+  const shouldTrackWork = ACTIVE_WORK_STATUSES.has(nextStatus);
+  const wasTrackingWork = ACTIVE_WORK_STATUSES.has(task.status);
   if (shouldTrackWork) {
     const dutyDate = getDutyDate(now);
     const bounds = getDutyDateBounds(dutyDate);
@@ -223,6 +230,11 @@ export async function PATCH(request, { params }) {
         where: { id: taskId },
         select: {
           timeLogs: true,
+          workSessions: {
+            where: { endedAt: null, userId: task.ownerId, source: "AUTO" },
+            orderBy: { startedAt: "desc" },
+            take: 1,
+          },
         },
       });
 
@@ -262,6 +274,46 @@ export async function PATCH(request, { params }) {
         await tx.taskTimeLog.update({
           where: { id: activeLog.id },
           data: { status: nextStatus },
+        });
+      }
+
+      if (shouldTrackWork && !wasTrackingWork) {
+        await endActiveSessionsAtTime(tx, task.ownerId, now);
+        await tx.taskWorkSession.create({
+          data: {
+            taskId,
+            userId: task.ownerId,
+            startedAt: now,
+            source: "AUTO",
+          },
+        });
+        await tx.task.update({
+          where: { id: taskId },
+          data: { lastStartedAt: now },
+        });
+      } else if (!shouldTrackWork && wasTrackingWork) {
+        const activeSession = currentTask?.workSessions?.[0] ?? null;
+        if (activeSession) {
+          await endWorkSession({
+            prismaClient: tx,
+            session: activeSession,
+            endedAt: now,
+            includeBreaks: true,
+          });
+        }
+      } else if (shouldTrackWork && !currentTask?.workSessions?.length) {
+        await endActiveSessionsAtTime(tx, task.ownerId, now);
+        await tx.taskWorkSession.create({
+          data: {
+            taskId,
+            userId: task.ownerId,
+            startedAt: now,
+            source: "AUTO",
+          },
+        });
+        await tx.task.update({
+          where: { id: taskId },
+          data: { lastStartedAt: now },
         });
       }
 
