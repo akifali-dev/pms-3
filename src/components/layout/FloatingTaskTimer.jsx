@@ -177,13 +177,6 @@ export default function FloatingTaskTimer({ session }) {
   }, [clampPosition]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setPosition((prev) => clampPosition(prev.x, prev.y));
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [clampPosition]);
-
-  useEffect(() => {
     const safe = clampPosition(position.x, position.y);
     window.localStorage.setItem(STORAGE_KEY_X, String(safe.x));
     window.localStorage.setItem(STORAGE_KEY_Y, String(safe.y));

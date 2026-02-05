@@ -4,7 +4,6 @@ import {
   ensureAuthenticated,
   getAuthContext,
 } from "@/lib/api";
-import { computeTaskSpentTime } from "@/lib/taskTimeCalculator";
 
 function toEstimatedSeconds(hoursValue) {
   const hours = Number(hoursValue ?? 0);
@@ -21,43 +20,34 @@ export async function GET() {
     return authError;
   }
 
-  const activeTask = await prisma.task.findFirst({
+  const activeSession = await prisma.taskWorkSession.findFirst({
     where: {
-      ownerId: context.user.id,
-      timeLogs: {
-        some: {
-          endedAt: null,
+      userId: context.user.id,
+      endedAt: null,
+    },
+    orderBy: { startedAt: "desc" },
+    include: {
+      task: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          estimatedHours: true,
+          milestoneId: true,
+          milestone: { select: { projectId: true } },
+          totalTimeSpent: true,
         },
-      },
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-    select: {
-      id: true,
-      title: true,
-      status: true,
-      ownerId: true,
-      estimatedHours: true,
-      milestoneId: true,
-      milestone: { select: { id: true, projectId: true } },
-      timeLogs: {
-        where: { endedAt: null },
-        orderBy: { startedAt: "desc" },
-        take: 1,
-        select: { id: true, startedAt: true },
       },
     },
   });
 
-  const activeLog = activeTask?.timeLogs?.[0] ?? null;
-  if (!activeTask || !activeLog) {
+  if (!activeSession?.task) {
     return buildSuccess("No active task session.", { active: false });
   }
 
   const activeBreak = await prisma.taskBreak.findFirst({
     where: {
-      taskId: activeTask.id,
+      taskId: activeSession.taskId,
       userId: context.user.id,
       endedAt: null,
     },
@@ -65,41 +55,19 @@ export async function GET() {
   });
 
   const serverNow = new Date();
-  const computed = await computeTaskSpentTime(
-    prisma,
-    activeTask.id,
-    activeTask.ownerId
-  );
-  const totalEffectiveSeconds = Math.max(
-    0,
-    Number(computed.effectiveSpentSeconds ?? 0)
-  );
-
-  const runningStartedAt = activeBreak ? null : new Date(activeLog.startedAt);
-  let accumulatedSeconds = totalEffectiveSeconds;
-
-  if (runningStartedAt) {
-    const runningElapsedSeconds = Math.max(
-      0,
-      Math.floor((serverNow.getTime() - runningStartedAt.getTime()) / 1000)
-    );
-    accumulatedSeconds = Math.max(
-      0,
-      totalEffectiveSeconds - runningElapsedSeconds
-    );
-  }
+  const runningStartedAt = activeBreak ? null : new Date(activeSession.startedAt);
 
   return buildSuccess("Active task session loaded.", {
     active: true,
     task: {
-      id: activeTask.id,
-      title: activeTask.title,
-      estimatedSeconds: toEstimatedSeconds(activeTask.estimatedHours),
-      status: activeTask.status,
-      milestoneId: activeTask.milestone?.id ?? activeTask.milestoneId,
-      projectId: activeTask.milestone?.projectId ?? null,
+      id: activeSession.task.id,
+      title: activeSession.task.title,
+      estimatedSeconds: toEstimatedSeconds(activeSession.task.estimatedHours),
+      status: activeSession.task.status,
+      milestoneId: activeSession.task.milestoneId,
+      projectId: activeSession.task.milestone?.projectId ?? null,
     },
-    accumulatedSeconds,
+    accumulatedSeconds: Math.max(0, Number(activeSession.task.totalTimeSpent ?? 0)),
     runningStartedAt: runningStartedAt ? runningStartedAt.toISOString() : null,
     isPaused: Boolean(activeBreak),
     activeBreak: activeBreak
