@@ -294,6 +294,7 @@ export async function PATCH(request, { params }) {
             userId: task.ownerId,
             activityLogId: statusActivityLog.id,
             startedAt: now,
+            endedAt: null,
             source: "AUTO",
           },
         });
@@ -319,6 +320,7 @@ export async function PATCH(request, { params }) {
             userId: task.ownerId,
             activityLogId: statusActivityLog.id,
             startedAt: now,
+            endedAt: null,
             source: "AUTO",
           },
         });
