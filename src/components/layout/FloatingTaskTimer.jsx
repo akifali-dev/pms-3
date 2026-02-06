@@ -50,11 +50,15 @@ function formatShort(totalSeconds = 0) {
   const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
   if (hours > 0 && minutes > 0) {
     return `${hours}h ${minutes}m`;
   }
   if (hours > 0) {
     return `${hours}h`;
+  }
+  if (remainingSeconds > 0) {
+    return `${minutes}m ${remainingSeconds}s`;
   }
   return `${minutes}m`;
 }
@@ -137,11 +141,17 @@ export default function FloatingTaskTimer({ session }) {
   }, [syncFromServer]);
 
   useEffect(() => {
+    if (!activeSession?.active) {
+      return undefined;
+    }
+    if (activeSession.isPaused || !activeSession.runningStartedAt) {
+      return undefined;
+    }
     const interval = window.setInterval(() => {
       setTick(Date.now());
     }, 1000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [activeSession]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -187,8 +197,15 @@ export default function FloatingTaskTimer({ session }) {
       return 0;
     }
 
-    const accumulated = Math.max(0, Number(activeSession.accumulatedSeconds ?? 0));
-    if (activeSession.isPaused || !activeSession.runningStartedAt) {
+    const accumulated = Math.max(
+      0,
+      Number(activeSession.accumulatedSeconds ?? 0)
+    );
+    if (
+      activeSession.isPaused ||
+      !activeSession.runningStartedAt ||
+      !activeSession.serverNow
+    ) {
       return accumulated;
     }
 
@@ -198,9 +215,16 @@ export default function FloatingTaskTimer({ session }) {
       return accumulated;
     }
 
-    const baseline = Math.max(0, accumulated + Math.floor((serverNowMs - startedMs) / 1000));
+    if (serverNowMs < startedMs) {
+      return accumulated;
+    }
+
+    const baseline = Math.max(
+      0,
+      accumulated + Math.floor((serverNowMs - startedMs) / 1000)
+    );
     const sinceRenderTick = Math.max(0, Math.floor((tick - serverNowMs) / 1000));
-    return baseline + sinceRenderTick;
+    return Math.max(0, baseline + sinceRenderTick);
   }, [activeSession, tick]);
 
   const estimatedSeconds = Math.max(0, Number(activeSession?.task?.estimatedSeconds ?? 0));
@@ -267,7 +291,11 @@ export default function FloatingTaskTimer({ session }) {
     }
     setReasonMenuOpen(false);
     setSubmitting(false);
-    syncFromServer();
+    if (data?.session?.active) {
+      setActiveSession(data.session);
+    } else {
+      syncFromServer();
+    }
   };
 
   const handleResume = async () => {
@@ -289,7 +317,11 @@ export default function FloatingTaskTimer({ session }) {
       return;
     }
     setSubmitting(false);
-    syncFromServer();
+    if (data?.session?.active) {
+      setActiveSession(data.session);
+    } else {
+      syncFromServer();
+    }
   };
 
   const onPointerDownDrag = (event) => {

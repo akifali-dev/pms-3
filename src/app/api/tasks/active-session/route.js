@@ -36,6 +36,7 @@ export async function GET() {
           milestoneId: true,
           milestone: { select: { projectId: true } },
           totalTimeSpent: true,
+          lastStartedAt: true,
         },
       },
     },
@@ -55,7 +56,11 @@ export async function GET() {
   });
 
   const serverNow = new Date();
-  const runningStartedAt = activeBreak ? null : new Date(activeSession.startedAt);
+  const runningStartedAt = activeBreak
+    ? null
+    : activeSession.task.lastStartedAt
+      ? new Date(activeSession.task.lastStartedAt)
+      : new Date(activeSession.startedAt);
 
   return buildSuccess("Active task session loaded.", {
     active: true,
@@ -68,7 +73,10 @@ export async function GET() {
       projectId: activeSession.task.milestone?.projectId ?? null,
     },
     accumulatedSeconds: Math.max(0, Number(activeSession.task.totalTimeSpent ?? 0)),
-    runningStartedAt: runningStartedAt ? runningStartedAt.toISOString() : null,
+    runningStartedAt:
+      runningStartedAt && Number.isFinite(runningStartedAt.getTime())
+        ? runningStartedAt.toISOString()
+        : null,
     isPaused: Boolean(activeBreak),
     activeBreak: activeBreak
       ? {
