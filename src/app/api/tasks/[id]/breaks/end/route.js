@@ -28,7 +28,7 @@ function canManageBreak(context, task) {
 }
 
 export async function POST(request, { params }) {
-  const {id:taskId} = await params;
+  const { id: taskId } = await params;
   const context = await getAuthContext();
   const authError = ensureAuthenticated(context);
   if (authError) {
@@ -71,21 +71,82 @@ export async function POST(request, { params }) {
     });
   }
 
-  const updatedBreaks = await prisma.$transaction(
-    activeBreaks.map((brk) => {
-      const startedAt = new Date(brk.startedAt);
-      const durationSeconds = Math.max(
-        0,
-        Math.floor((now.getTime() - startedAt.getTime()) / 1000)
+  const activeSession = await prisma.taskWorkSession.findFirst({
+    where: { taskId, userId: context.user.id, endedAt: null },
+    orderBy: { startedAt: "desc" },
+  });
+
+  const { updatedBreaks, updatedTask } = await prisma.$transaction(
+    async (tx) => {
+      const updatedBreaks = await Promise.all(
+        activeBreaks.map((brk) => {
+          const startedAt = new Date(brk.startedAt);
+          const durationSeconds = Math.max(
+            0,
+            Math.floor((now.getTime() - startedAt.getTime()) / 1000)
+          );
+          return tx.taskBreak.update({
+            where: { id: brk.id },
+            data: { endedAt: now, durationSeconds },
+          });
+        })
       );
-      return prisma.taskBreak.update({
-        where: { id: brk.id },
-        data: { endedAt: now, durationSeconds },
-      });
-    })
+
+      const updatedTask = activeSession
+        ? await tx.task.update({
+            where: { id: taskId },
+            data: { lastStartedAt: now },
+            select: {
+              id: true,
+              title: true,
+              estimatedHours: true,
+              status: true,
+              milestoneId: true,
+              milestone: { select: { projectId: true } },
+              totalTimeSpent: true,
+            },
+          })
+        : await tx.task.findUnique({
+            where: { id: taskId },
+            select: {
+              id: true,
+              title: true,
+              estimatedHours: true,
+              status: true,
+              milestoneId: true,
+              milestone: { select: { projectId: true } },
+              totalTimeSpent: true,
+            },
+          });
+
+      return { updatedBreaks, updatedTask };
+    }
   );
 
   const updatedBreak = updatedBreaks[0];
 
-  return buildSuccess("Break ended.", { break: updatedBreak });
+  return buildSuccess("Break ended.", {
+    break: updatedBreak,
+    session: updatedTask
+      ? {
+          active: Boolean(activeSession),
+          task: {
+            id: updatedTask.id,
+            title: updatedTask.title,
+            estimatedSeconds: Math.max(
+              0,
+              Math.round(Number(updatedTask.estimatedHours ?? 0) * 3600)
+            ),
+            status: updatedTask.status,
+            milestoneId: updatedTask.milestoneId,
+            projectId: updatedTask.milestone?.projectId ?? null,
+          },
+          accumulatedSeconds: Math.max(0, Number(updatedTask.totalTimeSpent ?? 0)),
+          runningStartedAt: activeSession ? now.toISOString() : null,
+          isPaused: false,
+          activeBreak: null,
+          serverNow: now.toISOString(),
+        }
+      : null,
+  });
 }
