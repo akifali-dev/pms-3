@@ -277,13 +277,24 @@ export async function PATCH(request, { params }) {
         });
       }
 
+      const actorName = context.user?.name || context.user?.email || "A teammate";
+      const statusActivityLog = await tx.activityLog.create({
+        data: {
+          userId: task.ownerId,
+          taskId,
+          description: `Task status updated by ${actorName}: ${task.title} moved from ${task.status ?? "new"} to ${nextStatus}.`,
+        },
+      });
+
       if (shouldTrackWork && !wasTrackingWork) {
         await endActiveSessionsAtTime(tx, task.ownerId, now);
         await tx.taskWorkSession.create({
           data: {
             taskId,
             userId: task.ownerId,
+            activityLogId: statusActivityLog.id,
             startedAt: now,
+            endedAt: null,
             source: "AUTO",
           },
         });
@@ -307,7 +318,9 @@ export async function PATCH(request, { params }) {
           data: {
             taskId,
             userId: task.ownerId,
+            activityLogId: statusActivityLog.id,
             startedAt: now,
+            endedAt: null,
             source: "AUTO",
           },
         });
@@ -323,16 +336,6 @@ export async function PATCH(request, { params }) {
           fromStatus: task.status,
           toStatus: nextStatus,
           changedById: context.user.id,
-        },
-      });
-
-      const actorName = context.user?.name || context.user?.email || "A teammate";
-
-      await tx.activityLog.create({
-        data: {
-          userId: task.ownerId,
-          taskId,
-          description: `Task status updated by ${actorName}: ${task.title} moved from ${task.status ?? "new"} to ${nextStatus}.`,
         },
       });
 
