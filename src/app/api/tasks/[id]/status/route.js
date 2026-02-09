@@ -222,158 +222,153 @@ export async function PATCH(request, { params }) {
     }
   }
 
+  const actorName = context.user?.name || context.user?.email || "A teammate";
   let updated;
   let offDutyWarning = null;
   try {
-    updated = await prisma.$transaction(async (tx) => {
-      const currentTask = await tx.task.findUnique({
-        where: { id: taskId },
-        select: {
-          timeLogs: true,
-          workSessions: {
-            where: { endedAt: null, userId: task.ownerId, source: "AUTO" },
-            orderBy: { startedAt: "desc" },
-            take: 1,
-          },
-        },
-      });
-
-      if (shouldTrackWork) {
-        const dutyStatus = await computeTaskSpentTime(
-          tx,
-          taskId,
-          task.ownerId
-        );
-        if (!dutyStatus.isOnDutyNow) {
-          offDutyWarning =
-            "You’re off duty; time will not count until you’re on duty.";
-        }
-      }
-
-      await tx.task.update({
-        where: { id: taskId },
-        data: updates,
-      });
-
-      const activeLog = getActiveTimeLog(currentTask);
-
-      if (nextStatus === "IN_PROGRESS" && !activeLog) {
-        await tx.taskTimeLog.create({
-          data: {
-            taskId,
-            status: nextStatus,
-            startedAt: now,
+    updated = await prisma.$transaction(
+      async (tx) => {
+        const currentTask = await tx.task.findUnique({
+          where: { id: taskId },
+          select: {
+            timeLogs: true,
+            workSessions: {
+              where: { endedAt: null, userId: task.ownerId, source: "AUTO" },
+              orderBy: { startedAt: "desc" },
+              take: 1,
+            },
           },
         });
-      } else if (nextStatus === "TESTING" && activeLog) {
-        await tx.taskTimeLog.update({
-          where: { id: activeLog.id },
-          data: { endedAt: now },
-        });
-      } else if (activeLog && activeLog.status !== nextStatus) {
-        await tx.taskTimeLog.update({
-          where: { id: activeLog.id },
-          data: { status: nextStatus },
-        });
-      }
 
-      const actorName = context.user?.name || context.user?.email || "A teammate";
-      const statusActivityLog = await tx.activityLog.create({
-        data: {
-          userId: task.ownerId,
-          taskId,
-          description: `Task status updated by ${actorName}: ${task.title} moved from ${task.status ?? "new"} to ${nextStatus}.`,
-        },
-      });
-
-      if (shouldTrackWork && !wasTrackingWork) {
-        await endActiveSessionsAtTime(tx, task.ownerId, now);
-        await tx.taskWorkSession.create({
-          data: {
-            taskId,
-            userId: task.ownerId,
-            activityLogId: statusActivityLog.id,
-            startedAt: now,
-            endedAt: null,
-            source: "AUTO",
-          },
-        });
         await tx.task.update({
           where: { id: taskId },
-          data: { lastStartedAt: now },
+          data: updates,
         });
-      } else if (!shouldTrackWork && wasTrackingWork) {
-        const activeSession = currentTask?.workSessions?.[0] ?? null;
-        if (activeSession) {
-          await endWorkSession({
-            prismaClient: tx,
-            session: activeSession,
-            endedAt: now,
-            includeBreaks: true,
+
+        const activeLog = getActiveTimeLog(currentTask);
+
+        if (nextStatus === "IN_PROGRESS" && !activeLog) {
+          await tx.taskTimeLog.create({
+            data: {
+              taskId,
+              status: nextStatus,
+              startedAt: now,
+            },
+          });
+        } else if (nextStatus === "TESTING" && activeLog) {
+          await tx.taskTimeLog.update({
+            where: { id: activeLog.id },
+            data: { endedAt: now },
+          });
+        } else if (activeLog && activeLog.status !== nextStatus) {
+          await tx.taskTimeLog.update({
+            where: { id: activeLog.id },
+            data: { status: nextStatus },
           });
         }
-      } else if (shouldTrackWork && !currentTask?.workSessions?.length) {
-        await endActiveSessionsAtTime(tx, task.ownerId, now);
-        await tx.taskWorkSession.create({
+
+        const statusActivityLog = await tx.activityLog.create({
+          data: {
+            userId: task.ownerId,
+            taskId,
+            description: `Task status updated by ${actorName}: ${task.title} moved from ${task.status ?? "new"} to ${nextStatus}.`,
+          },
+        });
+
+        if (shouldTrackWork && !wasTrackingWork) {
+          await endActiveSessionsAtTime(tx, task.ownerId, now);
+          await tx.taskWorkSession.create({
+            data: {
+              taskId,
+              userId: task.ownerId,
+              activityLogId: statusActivityLog.id,
+              startedAt: now,
+              endedAt: null,
+              source: "AUTO",
+            },
+          });
+          await tx.task.update({
+            where: { id: taskId },
+            data: { lastStartedAt: now },
+          });
+        } else if (!shouldTrackWork && wasTrackingWork) {
+          const activeSession = currentTask?.workSessions?.[0] ?? null;
+          if (activeSession) {
+            await endWorkSession({
+              prismaClient: tx,
+              session: activeSession,
+              endedAt: now,
+              includeBreaks: true,
+            });
+          }
+        } else if (shouldTrackWork && !currentTask?.workSessions?.length) {
+          await endActiveSessionsAtTime(tx, task.ownerId, now);
+          await tx.taskWorkSession.create({
+            data: {
+              taskId,
+              userId: task.ownerId,
+              activityLogId: statusActivityLog.id,
+              startedAt: now,
+              endedAt: null,
+              source: "AUTO",
+            },
+          });
+          await tx.task.update({
+            where: { id: taskId },
+            data: { lastStartedAt: now },
+          });
+        }
+
+        await tx.taskStatusHistory.create({
           data: {
             taskId,
-            userId: task.ownerId,
-            activityLogId: statusActivityLog.id,
-            startedAt: now,
-            endedAt: null,
-            source: "AUTO",
+            fromStatus: task.status,
+            toStatus: nextStatus,
+            changedById: context.user.id,
           },
         });
-        await tx.task.update({
+
+        return tx.task.findUnique({
           where: { id: taskId },
-          data: { lastStartedAt: now },
-        });
-      }
-
-      await tx.taskStatusHistory.create({
-        data: {
-          taskId,
-          fromStatus: task.status,
-          toStatus: nextStatus,
-          changedById: context.user.id,
-        },
-      });
-
-      const leaderIds = await getLeadershipUserIds(tx);
-      await createNotification({
-        prismaClient: tx,
-        type: "TASK_MOVEMENT",
-        actorId: context.user.id,
-        message: `${actorName} moved ${task.title} from ${task.status ?? "new"} to ${nextStatus}.`,
-        taskId,
-        projectId: task.milestone?.projectId ?? null,
-        milestoneId: task.milestone?.id ?? null,
-        recipientIds: [task.ownerId, ...leaderIds],
-      });
-
-      return tx.task.findUnique({
-        where: { id: taskId },
-        include: {
-          owner: { select: { id: true, name: true, email: true, role: true } },
-          milestone: {
-            select: { id: true, title: true, projectId: true },
+          include: {
+            owner: { select: { id: true, name: true, email: true, role: true } },
+            milestone: {
+              select: { id: true, title: true, projectId: true },
+            },
+            checklistItems: true,
+            statusHistory: true,
+            timeLogs: true,
+            breaks: { orderBy: { startedAt: "desc" } },
           },
-          checklistItems: true,
-          statusHistory: true,
-          timeLogs: true,
-          breaks: { orderBy: { startedAt: "desc" } },
-        },
-      });
-    });
+        });
+      },
+      { timeout: 10000 }
+    );
   } catch (error) {
     throw error;
   }
+
+  const leaderIds = await getLeadershipUserIds(prisma);
+  await createNotification({
+    prismaClient: prisma,
+    type: "TASK_MOVEMENT",
+    actorId: context.user.id,
+    message: `${actorName} moved ${task.title} from ${task.status ?? "new"} to ${nextStatus}.`,
+    taskId,
+    projectId: task.milestone?.projectId ?? null,
+    milestoneId: task.milestone?.id ?? null,
+    recipientIds: [task.ownerId, ...leaderIds],
+  });
 
   const computed = await computeTaskSpentTime(
     prisma,
     updated.id,
     updated.ownerId
   );
+  if (shouldTrackWork && !computed.isOnDutyNow) {
+    offDutyWarning =
+      "You’re off duty; time will not count until you’re on duty.";
+  }
 
   return buildSuccess("Task updated.", {
     task: {
