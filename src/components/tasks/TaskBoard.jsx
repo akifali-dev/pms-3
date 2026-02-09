@@ -304,12 +304,30 @@ export default function TaskBoard({
       body: JSON.stringify({ status: nextStatus }),
     });
 
-    const data = await response.json();
+    const responseText = await response.text();
+    let data = null;
+    if (responseText) {
+      try {
+        data = JSON.parse(responseText);
+      } catch (error) {
+        data = null;
+      }
+    }
 
     if (!response.ok) {
       addToast({
         title: "Action blocked",
         message: data?.error ?? "This action is not permitted.",
+        variant: "error",
+      });
+      setPendingTaskId(null);
+      return;
+    }
+
+    if (!data?.task) {
+      addToast({
+        title: "Update failed",
+        message: "Unable to refresh task details after the move.",
         variant: "error",
       });
       setPendingTaskId(null);
