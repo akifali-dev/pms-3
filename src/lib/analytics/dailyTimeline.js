@@ -11,7 +11,20 @@ function normalizeDate(value) {
   if (!value) {
     return null;
   }
-  const date = value instanceof Date ? value : new Date(value);
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return null;
+    }
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = DateTime.fromISO(value, { zone: TIME_ZONE, setZone: true });
+    if (!parsed.isValid) {
+      return null;
+    }
+    return parsed.toJSDate();
+  }
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return null;
   }
@@ -28,16 +41,6 @@ function getBaseWindow(dateValue) {
     .plus({ days: 1 })
     .set({ hour: 3, minute: 0, second: 0, millisecond: 0 });
   return { start, end };
-}
-
-function roundUpToTick(dateTime, windowStart) {
-  const diffMs = dateTime.toMillis() - windowStart.toMillis();
-  if (diffMs <= 0) {
-    return windowStart;
-  }
-  const tickMs = TICK_HOURS * 60 * 60 * 1000;
-  const ticks = Math.ceil(diffMs / tickMs);
-  return windowStart.plus({ milliseconds: ticks * tickMs });
 }
 
 function buildTicks(windowStart, windowEnd) {
@@ -469,19 +472,8 @@ export async function buildDailyTimeline({
     })
   );
 
-  const overallLatest = userIntervals.reduce((latest, entry) => {
-    if (entry.latestEnd && (!latest || entry.latestEnd > latest)) {
-      return entry.latestEnd;
-    }
-    return latest;
-  }, baseEnd);
-
-  const expandedEnd = roundUpToTick(
-    DateTime.fromJSDate(overallLatest, { zone: TIME_ZONE }),
-    baseWindow.start
-  );
   const windowStart = baseStart;
-  const windowEnd = expandedEnd.toJSDate();
+  const windowEnd = baseEnd;
 
   const rows = userIntervals.map((entry) => {
     const dutyIntervals = mergeIntervals(
@@ -563,8 +555,8 @@ export async function buildDailyTimeline({
   return {
     window: {
       startAt: baseWindow.start.toISO(),
-      endAt: expandedEnd.toISO(),
-      ticks: buildTicks(baseWindow.start, expandedEnd),
+      endAt: baseWindow.end.toISO(),
+      ticks: buildTicks(baseWindow.start, baseWindow.end),
     },
     rows,
   };
