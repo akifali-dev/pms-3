@@ -22,6 +22,7 @@ import {
   isManualLogDateAllowed,
   isManualLogInFuture,
 } from "@/lib/manualLogs";
+import { getDutyDate } from "@/lib/dutyHours";
 
 const periodOptions = [
   { id: "daily", label: "Daily" },
@@ -196,7 +197,8 @@ export default function ActivityDashboard({
   useEffect(() => {
     setIsHydrated(true);
     const today = formatDateOnly(new Date());
-    setSelectedDate(today);
+    const dutyDate = getDutyDate(new Date()) ?? today;
+    setSelectedDate(dutyDate);
     setLogForm((prev) => ({ ...prev, date: today }));
   }, []);
 

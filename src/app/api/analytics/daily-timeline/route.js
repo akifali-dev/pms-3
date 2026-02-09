@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { buildError, buildSuccess, ensureAuthenticated, getAuthContext } from "@/lib/api";
 import { buildDailyTimeline } from "@/lib/analytics/dailyTimeline";
+import { getDutyDate } from "@/lib/dutyHours";
 
 const MANAGEMENT_ROLES = new Set(["CEO", "PM", "CTO"]);
 
@@ -30,7 +31,7 @@ export async function GET(request) {
 
   const timeline = await buildDailyTimeline({
     prismaClient: prisma,
-    date: dateParam ?? new Date().toISOString().slice(0, 10),
+    date: dateParam ?? getDutyDate(new Date()),
     viewerUserId: context.user.id,
     viewerRole,
     targetUserId: isManager ? targetUserId : null,

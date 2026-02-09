@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import DailyTimelineChart from "@/components/analytics/DailyTimelineChart";
 import { DEFAULT_TIME_ZONE, formatDateInTimeZone } from "@/lib/attendanceTimes";
+import { getDutyDate } from "@/lib/dutyHours";
 
 const periodOptions = [
   { id: "daily", label: "Daily" },
@@ -39,7 +40,8 @@ export default function AnalyticsDashboardPanel({ users, currentUser, isManager 
   useOutsideClick(userMenuRef, () => setIsUserMenuOpen(false), isUserMenuOpen);
 
   useEffect(() => {
-    setSelectedDate(formatDateOnly(new Date()));
+    const today = formatDateOnly(new Date());
+    setSelectedDate(getDutyDate(new Date()) ?? today);
   }, []);
 
   const filteredUsers = useMemo(() => {
