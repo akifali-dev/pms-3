@@ -90,6 +90,7 @@ export default function FloatingTaskTimer({ session }) {
   const router = useRouter();
   const { addToast } = useToast();
   const [activeSession, setActiveSession] = useState(null);
+  const [onDuty, setOnDuty] = useState(false);
   const [tick, setTick] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -116,20 +117,34 @@ export default function FloatingTaskTimer({ session }) {
     if (!session) {
       setLoading(false);
       setActiveSession(null);
+      setOnDuty(false);
       return;
     }
 
-    const response = await fetch("/api/tasks/active-session", {
-      cache: "no-store",
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setLoading(false);
-      setActiveSession(null);
-      return;
+    const [attendanceResult, sessionResult] = await Promise.allSettled([
+      fetch("/api/attendance/current-status", { cache: "no-store" }),
+      fetch("/api/tasks/active-session", { cache: "no-store" }),
+    ]);
+
+    let resolvedOnDuty = false;
+    if (
+      attendanceResult.status === "fulfilled" &&
+      attendanceResult.value.ok
+    ) {
+      const attendanceData = await attendanceResult.value.json();
+      resolvedOnDuty = Boolean(attendanceData?.onDuty);
     }
 
-    setActiveSession(data.active ? data : null);
+    let resolvedSession = null;
+    if (sessionResult.status === "fulfilled") {
+      const data = await sessionResult.value.json();
+      if (sessionResult.value.ok) {
+        resolvedSession = data.active ? data : null;
+      }
+    }
+
+    setOnDuty(resolvedOnDuty);
+    setActiveSession(resolvedSession);
     setLoading(false);
   }, [session]);
 
@@ -357,7 +372,7 @@ export default function FloatingTaskTimer({ session }) {
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
-  if (loading || !activeSession?.active) {
+  if (loading || !onDuty || !activeSession?.active) {
     return null;
   }
 
