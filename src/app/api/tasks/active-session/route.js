@@ -4,6 +4,7 @@ import {
   ensureAuthenticated,
   getAuthContext,
 } from "@/lib/api";
+import { normalizeAutoOffForUser } from "@/lib/attendanceAutoOff";
 
 function toEstimatedSeconds(hoursValue) {
   const hours = Number(hoursValue ?? 0);
@@ -19,6 +20,8 @@ export async function GET() {
   if (authError) {
     return authError;
   }
+
+  await normalizeAutoOffForUser(prisma, context.user.id, new Date());
 
   const activeSession = await prisma.taskWorkSession.findFirst({
     where: {

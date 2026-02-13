@@ -7,6 +7,7 @@ import {
   getUserPresenceNow,
 } from "@/lib/dutyHours";
 import { getTimeZoneNow } from "@/lib/attendanceTimes";
+import { normalizeAutoOffForAttendances } from "@/lib/attendanceAutoOff";
 
 function getWeekRange() {
   const now = new Date();
@@ -63,6 +64,24 @@ export default async function AttendancePage() {
           breaks: { orderBy: { startAt: "asc" } },
         },
       });
+      await normalizeAutoOffForAttendances(prisma, attendance, getTimeZoneNow());
+
+      attendance = await prisma.attendance.findMany({
+        where: {
+          ...(isLeader ? {} : { userId: currentUser.id }),
+          date: {
+            gte: start,
+            lte: end,
+          },
+        },
+        orderBy: { date: "desc" },
+        include: {
+          user: { select: { id: true, name: true, email: true, role: true } },
+          wfhIntervals: { orderBy: { startAt: "asc" } },
+          breaks: { orderBy: { startAt: "asc" } },
+        },
+      });
+
       attendance = attendance.map((record) => {
         const computed = computeAttendanceDurationsForRecord(record);
         return {

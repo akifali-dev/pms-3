@@ -185,6 +185,8 @@ export async function PATCH(request, { params }) {
         inTime,
         outTime,
         note: normalizeNote(body?.note),
+        autoOff: false,
+        autoOffReason: null,
         userId: targetUserId,
       },
       include: {

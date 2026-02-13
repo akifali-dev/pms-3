@@ -5,6 +5,7 @@ import {
   getUserPresenceNow,
 } from "@/lib/dutyHours";
 import { getTimeZoneNow, normalizeAttendanceTimes } from "@/lib/attendanceTimes";
+import { normalizeAutoOffForAttendances } from "@/lib/attendanceAutoOff";
 import {
   PROJECT_MANAGEMENT_ROLES,
   buildError,
@@ -127,7 +128,19 @@ export async function GET(request) {
     where.date = range;
   }
 
-  const attendance = await prisma.attendance.findMany({
+  let attendance = await prisma.attendance.findMany({
+    where,
+    orderBy: { date: "desc" },
+    include: {
+      user: { select: { id: true, name: true, role: true, email: true } },
+      wfhIntervals: { orderBy: { startAt: "asc" } },
+      breaks: { orderBy: { startAt: "asc" } },
+    },
+  });
+
+  await normalizeAutoOffForAttendances(prisma, attendance, getTimeZoneNow());
+
+  attendance = await prisma.attendance.findMany({
     where,
     orderBy: { date: "desc" },
     include: {
@@ -215,6 +228,8 @@ export async function POST(request) {
       inTime,
       outTime,
       note: normalizeNote(body?.note),
+      autoOff: false,
+      autoOffReason: null,
       userId: targetUserId,
       date,
     },
@@ -224,6 +239,8 @@ export async function POST(request) {
       inTime,
       outTime,
       note: normalizeNote(body?.note),
+      autoOff: false,
+      autoOffReason: null,
     },
     include: {
       user: { select: { id: true, name: true, role: true, email: true } },

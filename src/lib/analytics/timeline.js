@@ -1,4 +1,5 @@
-import { getCutoffTime, getShiftWindow, mergeIntervals } from "@/lib/dutyHours";
+import { getShiftWindow, mergeIntervals } from "@/lib/dutyHours";
+import { normalizeAutoOffForAttendances, resolveAttendanceOutTime } from "@/lib/attendanceAutoOff";
 
 const WORKING_STATUSES = new Set(["IN_PROGRESS", "DEV_TEST"]);
 
@@ -11,22 +12,6 @@ function normalizeDate(value) {
     return null;
   }
   return date;
-}
-
-function isSameUtcDate(left, right) {
-  if (!left || !right) {
-    return false;
-  }
-  const leftDate = new Date(left);
-  const rightDate = new Date(right);
-  if (Number.isNaN(leftDate.getTime()) || Number.isNaN(rightDate.getTime())) {
-    return false;
-  }
-  return (
-    leftDate.getUTCFullYear() === rightDate.getUTCFullYear() &&
-    leftDate.getUTCMonth() === rightDate.getUTCMonth() &&
-    leftDate.getUTCDate() === rightDate.getUTCDate()
-  );
 }
 
 function clampIntervalToBounds(interval, bounds) {
@@ -62,15 +47,7 @@ function buildAttendanceIntervals(attendance, bounds, now) {
   if (attendance.inTime) {
     const start = normalizeDate(attendance.inTime);
     if (start) {
-      const cutoffTime = getCutoffTime(start);
-      let end = attendance.outTime ? normalizeDate(attendance.outTime) : null;
-      if (!end && cutoffTime) {
-        end = isSameUtcDate(attendance.date, now)
-          ? now > cutoffTime
-            ? cutoffTime
-            : now
-          : cutoffTime;
-      }
+      const end = resolveAttendanceOutTime(attendance, now);
       if (end) {
         const clamped = clampIntervalToBounds({ start, end, source: "ATTENDANCE" }, bounds);
         if (clamped) {
@@ -386,7 +363,7 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
     };
   }
 
-  const attendances = await prismaClient.attendance.findMany({
+  let attendances = await prismaClient.attendance.findMany({
     where: {
       userId,
       inTime: { lte: dayWindow.end },
@@ -396,6 +373,18 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
     orderBy: { inTime: "asc" },
   });
 
+
+  await normalizeAutoOffForAttendances(prismaClient, attendances, now);
+
+  attendances = await prismaClient.attendance.findMany({
+    where: {
+      userId,
+      inTime: { lte: dayWindow.end },
+      OR: [{ outTime: null }, { outTime: { gte: dayWindow.start } }],
+    },
+    include: { wfhIntervals: true, breaks: true },
+    orderBy: { inTime: "asc" },
+  });
   const attendanceIntervals = attendances.flatMap((attendance) => {
     const { dutyIntervals } = buildAttendanceIntervals(attendance, dayWindow, now);
     return dutyIntervals;

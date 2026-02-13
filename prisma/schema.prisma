@@ -209,6 +209,7 @@ model TaskBreak {
   startedAt       DateTime
   endedAt         DateTime?
   durationSeconds Int             @default(0)
+  endedBy         String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 }
@@ -256,6 +257,8 @@ model Attendance {
   inTime    DateTime?
   outTime   DateTime?
   note      String?
+  autoOff   Boolean   @default(false)
+  autoOffReason String?
   wfhIntervals AttendanceWFHInterval[]
   breaks    AttendanceBreak[]
   createdAt DateTime @default(now())
@@ -272,9 +275,10 @@ model AttendanceBreak {
   attendance      Attendance          @relation(fields: [attendanceId], references: [id])
   type            AttendanceBreakType
   startAt         DateTime
-  endAt           DateTime
+  endAt           DateTime?
   durationMinutes Int
   notes           String?
+  endedBy         String?
   createdByUserId String              @db.ObjectId
   createdByUser   User                @relation(fields: [createdByUserId], references: [id])
   createdAt       DateTime            @default(now())
@@ -306,6 +310,7 @@ model TaskWorkSession {
   startedAt   DateTime
   endedAt     DateTime?
   durationSeconds Int               @default(0)
+  endedBy     String?
   source      TaskWorkSessionSource @default(AUTO)
   createdAt   DateTime              @default(now())
 

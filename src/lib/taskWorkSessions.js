@@ -25,6 +25,7 @@ export async function endWorkSession({
   session,
   endedAt,
   includeBreaks = true,
+  endedBy = null,
 }) {
   if (!session || !endedAt) {
     return null;
@@ -60,6 +61,7 @@ export async function endWorkSession({
           where: { id: brk.id },
           data: {
             endedAt: endTime,
+            endedBy,
             durationSeconds: Math.max(
               0,
               Math.floor((endTime.getTime() - brkStart.getTime()) / 1000)
@@ -95,6 +97,7 @@ export async function endWorkSession({
     where: { id: session.id },
     data: {
       endedAt: endTime,
+      endedBy,
       durationSeconds,
     },
   });
