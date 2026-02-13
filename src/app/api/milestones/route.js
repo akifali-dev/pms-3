@@ -36,6 +36,12 @@ export async function GET(request) {
       project: {
         select: { id: true, name: true, createdById: true },
       },
+      tasks: {
+        select: {
+          id: true,
+          estimatedHours: true,
+        },
+      },
     },
   });
 
