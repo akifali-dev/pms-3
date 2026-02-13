@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import MilestoneCard from "@/components/milestones/MilestoneCard";
 import ActionButton from "@/components/ui/ActionButton";
 import { useToast } from "@/components/ui/ToastProvider";
-import { getMilestoneProgress } from "@/lib/milestoneProgress";
+import { getMilestoneStatus } from "@/lib/milestoneProgress";
 import PageHeader from "@/components/layout/PageHeader";
 import Modal from "@/components/ui/Modal";
 import ViewToggle from "@/components/ui/ViewToggle";
@@ -183,11 +183,11 @@ export default function MilestonesOverview() {
       }
 
       if (statusFilter !== "ALL") {
-        const { remainingDays } = getMilestoneProgress(
+        const { state } = getMilestoneStatus(
           milestone.startDate,
           milestone.endDate
         );
-        const isExpired = remainingDays === 0;
+        const isExpired = state === "overdue";
         if (statusFilter === "ACTIVE" && isExpired) {
           return false;
         }
