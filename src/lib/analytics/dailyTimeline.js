@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import { mergeIntervals } from "@/lib/dutyHours";
+import { normalizeAutoOffForAttendances, resolveAttendanceOutTime } from "@/lib/attendanceAutoOff";
 
 const TIME_ZONE = "Asia/Karachi";
 const TICK_HOURS = 2;
@@ -258,7 +259,20 @@ function getLatestIntervalEnd(intervals) {
 }
 
 async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, now) {
-  const attendances = await prismaClient.attendance.findMany({
+  let attendances = await prismaClient.attendance.findMany({
+    where: {
+      userId,
+      inTime: { lte: windowEnd },
+      OR: [{ outTime: null }, { outTime: { gte: windowStart } }],
+    },
+    include: { wfhIntervals: true, breaks: true },
+    orderBy: { inTime: "asc" },
+  });
+
+
+  await normalizeAutoOffForAttendances(prismaClient, attendances, now);
+
+  attendances = await prismaClient.attendance.findMany({
     where: {
       userId,
       inTime: { lte: windowEnd },
@@ -275,7 +289,7 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
   attendances.forEach((attendance) => {
     const inAt = normalizeDate(attendance.inTime);
     if (inAt) {
-      const outAt = normalizeDate(attendance.outTime) ?? now;
+      const outAt = resolveAttendanceOutTime(attendance, now);
       if (outAt > inAt) {
         dutyIntervals.push({ start: inAt, end: outAt });
       }
@@ -292,7 +306,7 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
 
     (attendance.breaks ?? []).forEach((brk) => {
       const start = normalizeDate(brk.startAt);
-      const end = normalizeDate(brk.endAt);
+      const end = normalizeDate(brk.endAt) ?? now;
       if (start && end && end > start) {
         breakIntervals.push({
           start,

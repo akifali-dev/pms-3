@@ -1,3 +1,4 @@
+import { normalizeAutoOffForUser, resolveAttendanceOutTime } from "@/lib/attendanceAutoOff";
 export const SHIFT_DAY_START_HOUR = 11;
 export const SHIFT_DAY_END_HOUR = 3;
 const DEFAULT_TIME_ZONE = "Asia/Karachi";
@@ -129,6 +130,23 @@ export function computeAttendanceDurationsForRecord(attendance) {
     const end = new Date(attendance.outTime);
     if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
       officeSeconds = Math.round((end - start) / 1000);
+      const breakSeconds = (attendance.breaks ?? []).reduce((total, brk) => {
+        const breakStart = brk?.startAt ? new Date(brk.startAt) : null;
+        const breakEnd = brk?.endAt ? new Date(brk.endAt) : null;
+        if (!breakStart || !breakEnd) {
+          return total;
+        }
+        if (Number.isNaN(breakStart.getTime()) || Number.isNaN(breakEnd.getTime())) {
+          return total;
+        }
+        const clampedStart = breakStart > start ? breakStart : start;
+        const clampedEnd = breakEnd < end ? breakEnd : end;
+        if (clampedEnd <= clampedStart) {
+          return total;
+        }
+        return total + Math.round((clampedEnd - clampedStart) / 1000);
+      }, 0);
+      officeSeconds = Math.max(0, officeSeconds - breakSeconds);
     }
   }
   let wfhSeconds = 0;
@@ -167,22 +185,6 @@ export async function computeAttendanceDurations(prismaClient, attendanceId) {
     return null;
   }
   return computeAttendanceDurationsForRecord(attendance);
-}
-
-function isSameUtcDate(left, right) {
-  if (!left || !right) {
-    return false;
-  }
-  const leftDate = new Date(left);
-  const rightDate = new Date(right);
-  if (Number.isNaN(leftDate.getTime()) || Number.isNaN(rightDate.getTime())) {
-    return false;
-  }
-  return (
-    leftDate.getUTCFullYear() === rightDate.getUTCFullYear() &&
-    leftDate.getUTCMonth() === rightDate.getUTCMonth() &&
-    leftDate.getUTCDate() === rightDate.getUTCDate()
-  );
 }
 
 function normalizeInterval(interval) {
@@ -290,6 +292,8 @@ export async function getDutyIntervals(prismaClient, userId, date, now = new Dat
   }
   const { start, end } = bounds;
 
+  await normalizeAutoOffForUser(prismaClient, userId, now);
+
   const attendance = await prismaClient.attendance.findFirst({
     where: {
       userId,
@@ -304,15 +308,7 @@ export async function getDutyIntervals(prismaClient, userId, date, now = new Dat
 
   if (attendance?.inTime) {
     const startTime = new Date(attendance.inTime);
-    const cutoffTime = getCutoffTime(attendance.inTime);
-    let endTime = attendance.outTime || null;
-    if (!endTime && cutoffTime) {
-      endTime = isSameUtcDate(attendance.date, now)
-        ? now > cutoffTime
-          ? cutoffTime
-          : now
-        : cutoffTime;
-    }
+    const endTime = resolveAttendanceOutTime(attendance, now);
     if (endTime) {
       intervals.push({
         start: startTime,
@@ -382,6 +378,8 @@ export async function getDutyIntervalsForRange(
     startDay = endDay;
     endDay = swap;
   }
+  await normalizeAutoOffForUser(prismaClient, userId, now);
+
   const attendances = await prismaClient.attendance.findMany({
     where: {
       userId,
@@ -397,15 +395,7 @@ export async function getDutyIntervalsForRange(
   attendances.forEach((attendance) => {
     if (attendance?.inTime) {
       const start = new Date(attendance.inTime);
-      const cutoffTime = getCutoffTime(attendance.inTime);
-      let end = attendance.outTime || null;
-      if (!end && cutoffTime) {
-        end = isSameUtcDate(attendance.date, now)
-          ? now > cutoffTime
-            ? cutoffTime
-            : now
-          : cutoffTime;
-      }
+      const end = resolveAttendanceOutTime(attendance, now);
       if (end) {
         intervals.push({ start, end, source: "ATTENDANCE" });
       }

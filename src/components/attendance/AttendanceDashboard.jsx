@@ -6,7 +6,7 @@ import Modal from "@/components/ui/Modal";
 import PageHeader from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/ToastProvider";
 import useOutsideClick from "@/hooks/useOutsideClick";
-import { getCutoffTime } from "@/lib/dutyHours";
+import { getAttendanceAutoOffTime } from "@/lib/attendanceAutoOff";
 
 const badgeOptions = [
   { id: "all", label: "All" },
@@ -178,7 +178,7 @@ function isAttendanceRunning(attendance, now = new Date()) {
   if (Number.isNaN(start.getTime())) {
     return false;
   }
-  const cutoff = getCutoffTime(start);
+  const cutoff = getAttendanceAutoOffTime(start);
   if (!cutoff) {
     return false;
   }
@@ -1107,7 +1107,17 @@ export default function AttendanceDashboard({
                   </td>
                   <td className="px-4 py-4 text-[color:var(--color-text)]">
                     {record.outTime ? (
-                      formatDisplayTime(record.outTime)
+                      <div className="space-y-1">
+                        <p>{formatDisplayTime(record.outTime)}</p>
+                        {record.autoOff ? (
+                          <span
+                            className="inline-flex rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200"
+                            title="Auto closed after 10 hours (missing out time)"
+                          >
+                            Auto Off
+                          </span>
+                        ) : null}
+                      </div>
                     ) : record.inTime ? (
                       <div className="space-y-1 text-[color:var(--color-text-subtle)]">
                         <p>Out time not added yet</p>
