@@ -7,12 +7,17 @@ import {
 } from "@/lib/api";
 import {
   buildManualLogTimes,
-  buildManualLogDate,
   isManualLogInFuture,
   isManualLogDateAllowed,
   MANUAL_LOG_CATEGORIES,
   normalizeManualCategories,
 } from "@/lib/manualLogs";
+import { formatTimeInTimeZone } from "@/lib/attendanceTimes";
+import { PST_TIME_ZONE } from "@/lib/pstDate";
+import {
+  findConflictingManualLog,
+  withManualLogStatus,
+} from "@/lib/manualLogMutations";
 
 async function getManualLog(logId) {
   return prisma.activityLog.findUnique({
@@ -51,33 +56,36 @@ export async function PATCH(request, { params }) {
 
   const body = await request.json();
   const updates = {};
-  const targetDateInput = body?.date ?? log.date;
-  const targetDate = buildManualLogDate(targetDateInput);
+  const targetDateInput = log.date;
+  const existingStartTime = log.startAt
+    ? formatTimeInTimeZone(log.startAt, PST_TIME_ZONE)
+    : null;
 
   if (body?.description) {
     updates.description = body.description.trim();
   }
 
   if (body?.date) {
-    if (!targetDate) {
-      return buildError("Date must be valid.", 400);
-    }
-    updates.date = targetDate;
+    return buildError("Date cannot be changed for manual activity logs.", 400);
   }
 
-  const hasTimeUpdate = body?.startTime || body?.endTime || body?.date;
+  if (body?.startTime) {
+    return buildError("Start time cannot be changed for manual activity logs.", 400);
+  }
+
+  const hasTimeUpdate = Object.prototype.hasOwnProperty.call(body ?? {}, "endTime");
   if (
     hasTimeUpdate &&
     isManualLogInFuture({
       date: targetDateInput,
-      startTime: body.startTime,
+      startTime: existingStartTime,
       endTime: body.endTime,
     })
   ) {
     return buildError("Manual logs cannot be in the future.", 400);
   }
 
-  if (!isManualLogDateAllowed(targetDateInput)) {
+  if (!isManualLogDateAllowed(log.date)) {
     return buildError(
       "Manual logs can only be added/edited for today or last 2 days.",
       403
@@ -98,13 +106,13 @@ export async function PATCH(request, { params }) {
   }
 
   if (hasTimeUpdate) {
-    if (!body?.startTime || !body?.endTime) {
-      return buildError("Start and end time are required.", 400);
+    if (!body?.endTime) {
+      return buildError("End time is required to complete this manual activity.", 400);
     }
     const { startAt, endAt, durationSeconds, error: timeError } =
       buildManualLogTimes({
         date: targetDateInput,
-        startTime: body.startTime,
+        startTime: existingStartTime,
         endTime: body.endTime,
       });
     if (timeError) {
@@ -113,6 +121,16 @@ export async function PATCH(request, { params }) {
     updates.startAt = startAt;
     updates.endAt = endAt;
     updates.durationSeconds = durationSeconds;
+
+    const conflict = await findConflictingManualLog(prisma, {
+      userId: context.user.id,
+      startAt,
+      endAt,
+      excludeId: logId,
+    });
+    if (conflict) {
+      return buildError("Manual activity overlaps with another log.", 409);
+    }
   }
 
   if (Object.keys(updates).length === 0) {
@@ -128,5 +146,5 @@ export async function PATCH(request, { params }) {
     },
   });
 
-  return buildSuccess("Activity log updated.", { activityLog });
+  return buildSuccess("Activity log updated.", { activityLog: withManualLogStatus(activityLog) });
 }

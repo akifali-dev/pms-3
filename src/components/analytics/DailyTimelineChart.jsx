@@ -9,6 +9,7 @@ const SEGMENT_COLORS = {
   IDLE: "var(--color-idle)",
   WORK_TASK: "var(--color-work)",
   WORK_MANUAL: "var(--color-work-manual)",
+  WORK_MANUAL_RUNNING: "var(--color-work-manual)",
   BREAK: "var(--color-break)",
 };
 
@@ -17,6 +18,7 @@ const SEGMENT_LABELS = {
   IDLE: "Idle",
   WORK_TASK: "Task work",
   WORK_MANUAL: "Manual work",
+  WORK_MANUAL_RUNNING: "Manual work (running)",
   BREAK: "Break",
 };
 
