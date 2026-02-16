@@ -7,6 +7,7 @@ import PageHeader from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/ToastProvider";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import { getAttendanceAutoOffTime } from "@/lib/attendanceAutoOff";
+import { formatBreakTypes, normalizeBreakTypes } from "@/lib/breakTypes";
 import {
   formatDateInPSTDateString,
   getTodayInPSTDateString,
@@ -206,9 +207,8 @@ function formatPresenceLabel(presence) {
   return "Off duty";
 }
 
-function formatBreakType(value) {
-  const option = breakTypeOptions.find((item) => item.id === value);
-  return option?.label ?? "Other";
+function formatBreakType(types, fallbackType = null) {
+  return formatBreakTypes(types, fallbackType);
 }
 
 function combineDateTime(dateValue, timeValue) {
@@ -381,7 +381,7 @@ export default function AttendanceDashboard({
     attendanceId: null,
   });
   const [breakForm, setBreakForm] = useState({
-    type: "LUNCH",
+    types: ["LUNCH"],
     startTime: "",
     durationMinutes: "",
     notes: "",
@@ -663,8 +663,9 @@ export default function AttendanceDashboard({
     const startTimeValue = breakItem?.startAt
       ? formatTimeInput(breakItem.startAt)
       : formatTimeInput(new Date());
+    const nextTypes = normalizeBreakTypes(breakItem?.types, breakItem?.type);
     setBreakForm({
-      type: breakItem?.type ?? "LUNCH",
+      types: nextTypes.length ? nextTypes : ["LUNCH"],
       startTime: startTimeValue,
       durationMinutes: breakItem?.durationMinutes?.toString() ?? "",
       notes: breakItem?.notes ?? "",
@@ -681,6 +682,16 @@ export default function AttendanceDashboard({
     setBreakForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleBreakTypeToggle = (type) => {
+    setBreakForm((prev) => {
+      const hasType = prev.types.includes(type);
+      const nextTypes = hasType
+        ? prev.types.filter((item) => item !== type)
+        : [...prev.types, type];
+      return { ...prev, types: nextTypes };
+    });
+  };
+
   const handleBreakSubmit = async (event) => {
     event.preventDefault();
     const targetAttendanceId =
@@ -688,6 +699,14 @@ export default function AttendanceDashboard({
         ? breakModal.attendanceId ?? activeBreakRecord?.id
         : breakModal.breakItem?.attendanceId;
     if (!targetAttendanceId) {
+      return;
+    }
+    if (!breakForm.types.length) {
+      addToast({
+        title: "Break type required",
+        message: "Select at least one break type.",
+        variant: "warning",
+      });
       return;
     }
     if (!breakForm.startTime || !breakForm.durationMinutes) {
@@ -701,7 +720,7 @@ export default function AttendanceDashboard({
     setBreakSubmitting(true);
     try {
       const payload = {
-        type: breakForm.type,
+        types: breakForm.types,
         startTime: breakForm.startTime,
         durationMinutes: Number(breakForm.durationMinutes),
         notes: breakForm.notes,
@@ -1017,7 +1036,7 @@ export default function AttendanceDashboard({
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[color:var(--color-text-muted)]">
-                        {formatBreakType(item.type)}
+                        {formatBreakType(item.types, item.type)}
                       </span>
                       <span className="text-xs text-[color:var(--color-text-muted)]">
                         {formatDurationFromMinutes(item.durationMinutes)}
@@ -1365,7 +1384,7 @@ export default function AttendanceDashboard({
                         <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
-                          {formatBreakType(item.type)}
+                          {formatBreakType(item.types, item.type)}
                             </span>
                             <span>{formatDurationFromMinutes(item.durationMinutes)}</span>
                             <span>
@@ -1419,21 +1438,21 @@ export default function AttendanceDashboard({
       >
         <form onSubmit={handleBreakSubmit} className="flex h-full flex-col">
           <div className="mt-4 flex-1 space-y-4 overflow-y-auto pr-1 hide-scrollbar">
-            <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
-              Break type
-              <select
-                name="type"
-                value={breakForm.type}
-                onChange={handleBreakFormChange}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
-              >
+            <div className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
+              <p>Break type</p>
+              <div className="grid gap-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] p-3">
                 {breakTypeOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
+                  <label key={option.id} className="flex items-center gap-2 text-sm text-[color:var(--color-text)]">
+                    <input
+                      type="checkbox"
+                      checked={breakForm.types.includes(option.id)}
+                      onChange={() => handleBreakTypeToggle(option.id)}
+                    />
                     {option.label}
-                  </option>
+                  </label>
                 ))}
-              </select>
-            </label>
+              </div>
+            </div>
             <div className="grid gap-3 lg:grid-cols-2">
               <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
                 Start time
@@ -1460,12 +1479,13 @@ export default function AttendanceDashboard({
               </label>
             </div>
             <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">
-              Notes (optional)
+              Notes
               <textarea
                 name="notes"
                 value={breakForm.notes}
                 onChange={handleBreakFormChange}
                 rows={3}
+                
                 className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
               />
             </label>

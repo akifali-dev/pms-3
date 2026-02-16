@@ -5,6 +5,7 @@ import {
   getAuthContext,
 } from "@/lib/api";
 import { normalizeAutoOffForUser } from "@/lib/attendanceAutoOff";
+import { normalizeBreakTypes } from "@/lib/breakTypes";
 
 function toEstimatedSeconds(hoursValue) {
   const hours = Number(hoursValue ?? 0);
@@ -84,6 +85,7 @@ export async function GET() {
     activeBreak: activeBreak
       ? {
           id: activeBreak.id,
+          reasons: normalizeBreakTypes(activeBreak.reasons, activeBreak.reason),
           reason: activeBreak.reason,
           startedAt: activeBreak.startedAt,
         }

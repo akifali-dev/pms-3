@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 import { mergeIntervals } from "@/lib/dutyHours";
 import { normalizeAutoOffForAttendances, resolveAttendanceOutTime } from "@/lib/attendanceAutoOff";
+import { formatBreakTypes, normalizeBreakTypes } from "@/lib/breakTypes";
 
 const TIME_ZONE = "Asia/Karachi";
 const TICK_HOURS = 2;
@@ -179,7 +180,7 @@ function buildSegments({
     if (activeBreak) {
       type = "BREAK";
       breakType = activeBreak.breakType ?? "ATTENDANCE";
-      breakReason = activeBreak.reason ?? "OTHER";
+      breakReason = activeBreak.reasonLabel ?? formatBreakTypes(activeBreak.reasons, activeBreak.reason);
       label = breakReason;
     } else if (activeTask) {
       type = "WORK_TASK";
@@ -311,7 +312,8 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
         breakIntervals.push({
           start,
           end,
-          reason: brk.type ?? "OTHER",
+          reasons: normalizeBreakTypes(brk.types, brk.type),
+          reasonLabel: formatBreakTypes(brk.types, brk.type),
           breakType: "ATTENDANCE",
         });
       }
@@ -335,7 +337,7 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
       startedAt: { lte: windowEnd },
       OR: [{ endedAt: null }, { endedAt: { gte: windowStart } }],
     },
-    select: { startedAt: true, endedAt: true, reason: true },
+    select: { startedAt: true, endedAt: true, reason: true, reasons: true },
   });
 
   const rawTaskIntervals = workLogs
@@ -356,7 +358,13 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
       if (!start || !end || end <= start) {
         return null;
       }
-      return { start, end, reason: brk.reason ?? "OTHER", breakType: "TASK_PAUSE" };
+      return {
+        start,
+        end,
+        reasons: normalizeBreakTypes(brk.reasons, brk.reason),
+        reasonLabel: formatBreakTypes(brk.reasons, brk.reason),
+        breakType: "TASK_PAUSE",
+      };
     })
     .filter(Boolean);
 

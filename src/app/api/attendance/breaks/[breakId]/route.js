@@ -8,14 +8,7 @@ import {
 } from "@/lib/api";
 import { computeAttendanceDurationsForRecord, getCutoffTime } from "@/lib/dutyHours";
 import { combineShiftDateAndTime, getTimeZoneNow } from "@/lib/attendanceTimes";
-
-const BREAK_TYPES = new Set([
-  "LUNCH",
-  "DINNER",
-  "NAMAZ",
-  "REFRESHMENT",
-  "OTHER",
-]);
+import { normalizeBreakTypes } from "@/lib/breakTypes";
 
 function normalizeNotes(value) {
   if (value === undefined) {
@@ -120,19 +113,23 @@ export async function PATCH(request, { params }) {
 
   const body = await request.json();
 
-  let type = existingBreak.type;
-  if (body?.type !== undefined) {
-    const nextType = body?.type?.toString().toUpperCase();
-    if (!BREAK_TYPES.has(nextType)) {
-      return buildError("Break type must be valid.", 400);
-    }
-    type = nextType;
+  const baseTypes = normalizeBreakTypes(existingBreak.types, existingBreak.type);
+  const shouldUpdateTypes = body?.types !== undefined || body?.type !== undefined;
+  const types = shouldUpdateTypes
+    ? normalizeBreakTypes(body?.types, body?.type)
+    : baseTypes;
+
+  if (!types.length) {
+    return buildError("At least one break type is required.", 400);
   }
 
   const durationMinutes = normalizeDurationMinutes(body?.durationMinutes);
   if (durationMinutes === null) {
     return buildError("Duration must be a positive number of minutes.", 400);
   }
+
+  const incomingNotes = normalizeNotes(body?.notes);
+  const notes = incomingNotes === undefined ? existingBreak.notes : incomingNotes;
 
   const nextDuration = durationMinutes ?? existingBreak.durationMinutes;
   const startAt = body?.startTime
@@ -155,11 +152,12 @@ export async function PATCH(request, { params }) {
   await prisma.attendanceBreak.update({
     where: { id: breakId },
     data: {
-      type,
+      type: types[0],
+      types,
       startAt,
       endAt,
       durationMinutes: nextDuration,
-      notes: normalizeNotes(body?.notes),
+      notes,
     },
   });
 

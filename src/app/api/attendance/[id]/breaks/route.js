@@ -8,14 +8,7 @@ import {
 } from "@/lib/api";
 import { computeAttendanceDurationsForRecord, getCutoffTime } from "@/lib/dutyHours";
 import { combineShiftDateAndTime, getTimeZoneNow } from "@/lib/attendanceTimes";
-
-const BREAK_TYPES = new Set([
-  "LUNCH",
-  "DINNER",
-  "NAMAZ",
-  "REFRESHMENT",
-  "OTHER",
-]);
+import { normalizeBreakTypes } from "@/lib/breakTypes";
 
 function normalizeNotes(value) {
   if (value === undefined) {
@@ -117,10 +110,12 @@ export async function POST(request, { params }) {
   }
 
   const body = await request.json();
-  const type = body?.type?.toString().toUpperCase();
-  if (!BREAK_TYPES.has(type)) {
-    return buildError("Break type is required.", 400);
+  const types = normalizeBreakTypes(body?.types, body?.type);
+  if (!types.length) {
+    return buildError("At least one break type is required.", 400);
   }
+
+  const notes = normalizeNotes(body?.notes);
 
   const durationMinutes = normalizeDurationMinutes(body?.durationMinutes);
   if (!durationMinutes) {
@@ -145,11 +140,12 @@ export async function POST(request, { params }) {
   await prisma.attendanceBreak.create({
     data: {
       attendanceId: attendance.id,
-      type,
+      type: types[0],
+      types,
       startAt,
       endAt,
       durationMinutes,
-      notes: normalizeNotes(body?.notes),
+      notes,
       createdByUserId: context.user.id,
     },
   });

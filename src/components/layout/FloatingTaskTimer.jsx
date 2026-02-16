@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/ToastProvider";
 import useOutsideClick from "@/hooks/useOutsideClick";
+import { BREAK_TYPES, formatBreakTypes } from "@/lib/breakTypes";
 
 const STORAGE_KEY_X = "timer_pos_x";
 const STORAGE_KEY_Y = "timer_pos_y";
-const BREAK_REASONS = ["NAMAZ", "LUNCH", "DINNER", "REFRESHMENT", "OTHER"];
 
 const COLOR_MAP = {
   neutral: {
@@ -95,6 +95,8 @@ export default function FloatingTaskTimer({ session }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [reasonMenuOpen, setReasonMenuOpen] = useState(false);
+  const [selectedPauseTypes, setSelectedPauseTypes] = useState([]);
+  const [pauseNote, setPauseNote] = useState("");
   const menuRef = useRef(null);
   useOutsideClick(menuRef, () => setReasonMenuOpen(false), reasonMenuOpen);
 
@@ -284,15 +286,23 @@ export default function FloatingTaskTimer({ session }) {
     );
   }, [activeSession, addToast, router]);
 
-  const handlePause = async (reason) => {
+  const handlePause = async () => {
     if (!activeSession?.task?.id || !canControl) {
+      return;
+    }
+    if (!selectedPauseTypes.length) {
+      addToast({
+        title: "Break type required",
+        message: "Select at least one break type.",
+        variant: "warning",
+      });
       return;
     }
     setSubmitting(true);
     const response = await fetch(`/api/tasks/${activeSession.task.id}/breaks/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ reasons: selectedPauseTypes, note: pauseNote.trim() || undefined }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -305,6 +315,8 @@ export default function FloatingTaskTimer({ session }) {
       return;
     }
     setReasonMenuOpen(false);
+    setSelectedPauseTypes([]);
+    setPauseNote("");
     setSubmitting(false);
     if (data?.session?.active) {
       setActiveSession(data.session);
@@ -477,17 +489,41 @@ export default function FloatingTaskTimer({ session }) {
               Pause
             </button>
             {reasonMenuOpen ? (
-              <div className="absolute left-0 top-9 z-10 w-44 rounded-xl border bg-[color:var(--color-surface)] p-1 shadow-xl" style={{ borderColor: "var(--color-border)" }}>
-                {BREAK_REASONS.map((reason) => (
-                  <button
-                    key={reason}
-                    type="button"
-                    className="w-full rounded-lg px-2 py-1.5 text-left text-xs hover:bg-[color:var(--color-muted-bg)]"
-                    onClick={() => handlePause(reason)}
-                  >
-                    {reason}
-                  </button>
-                ))}
+              <div className="absolute left-0 top-9 z-10 w-60 rounded-xl border bg-[color:var(--color-surface)] p-2 shadow-xl" style={{ borderColor: "var(--color-border)" }}>
+                <div className="space-y-1">
+                  {BREAK_TYPES.map((reason) => (
+                    <label key={reason} className="flex items-center gap-2 rounded-lg px-1 py-1 text-xs hover:bg-[color:var(--color-muted-bg)]">
+                      <input
+                        type="checkbox"
+                        checked={selectedPauseTypes.includes(reason)}
+                        onChange={() =>
+                          setSelectedPauseTypes((prev) =>
+                            prev.includes(reason)
+                              ? prev.filter((item) => item !== reason)
+                              : [...prev, reason]
+                          )
+                        }
+                      />
+                      {formatBreakTypes([reason])}
+                    </label>
+                  ))}
+                </div>
+                <textarea
+                  value={pauseNote}
+                  onChange={(event) => setPauseNote(event.target.value)}
+                  placeholder="Note"
+                  rows={2}
+                  className="mt-2 w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-2 py-1 text-xs"
+                  
+                />
+                <button
+                  type="button"
+                  className="mt-2 w-full rounded-lg border px-2 py-1 text-xs font-semibold"
+                  style={{ borderColor: "var(--color-border)" }}
+                  onClick={handlePause}
+                >
+                  Start pause ({selectedPauseTypes.length || 0})
+                </button>
               </div>
             ) : null}
           </div>

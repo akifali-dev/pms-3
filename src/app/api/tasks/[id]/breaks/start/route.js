@@ -6,16 +6,9 @@ import {
   getAuthContext,
   isManagementRole,
 } from "@/lib/api";
+import { normalizeBreakTypes } from "@/lib/breakTypes";
 
 const ALLOWED_STATUSES = ["IN_PROGRESS", "DEV_TEST"];
-const BREAK_REASONS = [
-  "NAMAZ",
-  "LUNCH",
-  "MEAL",
-  "DINNER",
-  "REFRESHMENT",
-  "OTHER",
-];
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -70,14 +63,12 @@ export async function POST(request, { params }) {
   }
 
   const body = await request.json();
-  const reason = body?.reason;
-  const note = body?.note?.trim();
-
-  if (!BREAK_REASONS.includes(reason)) {
-    return buildError("Break reason is required.", 400);
+  const reasons = normalizeBreakTypes(body?.reasons, body?.reason);
+  if (!reasons.length) {
+    return buildError("At least one break type is required.", 400);
   }
 
-  const normalizedReason = reason === "DINNER" ? "MEAL" : reason;
+  const note = body?.note?.trim() || null;
 
   const existingBreak = await prisma.taskBreak.findFirst({
     where: { taskId, userId: context.user.id, endedAt: null },
@@ -131,8 +122,9 @@ export async function POST(request, { params }) {
       data: {
         taskId,
         userId: context.user.id,
-        reason: normalizedReason,
-        note: note || null,
+        reasons,
+        reason: reasons[0],
+        note,
         startedAt: now,
         endedAt: null,
       },
@@ -163,6 +155,7 @@ export async function POST(request, { params }) {
         isPaused: true,
         activeBreak: {
           id: createdBreak.id,
+          reasons: createdBreak.reasons,
           reason: createdBreak.reason,
           startedAt: createdBreak.startedAt,
         },
