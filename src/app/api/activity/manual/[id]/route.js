@@ -7,13 +7,12 @@ import {
 } from "@/lib/api";
 import {
   buildManualLogTimes,
+  formatManualLogTime,
   isManualLogInFuture,
   isManualLogDateAllowed,
   MANUAL_LOG_CATEGORIES,
   normalizeManualCategories,
 } from "@/lib/manualLogs";
-import { formatTimeInTimeZone } from "@/lib/attendanceTimes";
-import { PST_TIME_ZONE } from "@/lib/pstDate";
 import {
   findConflictingManualLog,
   withManualLogStatus,
@@ -58,7 +57,7 @@ export async function PATCH(request, { params }) {
   const updates = {};
   const targetDateInput = log.date;
   const existingStartTime = log.startAt
-    ? formatTimeInTimeZone(log.startAt, PST_TIME_ZONE)
+    ? formatManualLogTime(log.startAt)
     : null;
 
   if (body?.description) {
