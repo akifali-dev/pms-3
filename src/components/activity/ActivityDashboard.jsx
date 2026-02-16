@@ -58,6 +58,28 @@ function formatTimeOnly(value) {
   return formatTimeInTimeZone(value, DEFAULT_TIME_ZONE) ?? "";
 }
 
+function getManualStatus(log) {
+  if (!log || log.taskId) {
+    return null;
+  }
+  if (log.status === "RUNNING" || !log.endAt) {
+    return "RUNNING";
+  }
+  return "COMPLETED";
+}
+
+function getRunningDurationLabel(startAt, now = new Date()) {
+  if (!startAt) {
+    return null;
+  }
+  const start = new Date(startAt);
+  if (Number.isNaN(start.getTime())) {
+    return null;
+  }
+  const minutes = Math.max(0, Math.floor((now.getTime() - start.getTime()) / 60000));
+  return `Started ${minutes} min ago`;
+}
+
 
 function getPeriodRange(period, baseDate = new Date()) {
   const now = new Date(baseDate);
@@ -235,7 +257,7 @@ export default function ActivityDashboard({
       if (targetUserId && isManager) {
         params.set("userId", targetUserId);
       }
-      const response = await fetch(`/api/activity-logs?${params.toString()}`);
+      const response = await fetch(`/api/activity?${params.toString()}`);
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data?.error ?? "Unable to load activity logs.");
@@ -413,15 +435,15 @@ export default function ActivityDashboard({
       });
       return;
     }
-    if (!logForm.startTime || !logForm.endTime) {
+    if (!logForm.startTime) {
       addToast({
         title: "Time required",
-        message: "Please provide both a start and end time.",
+        message: "Please provide a start time.",
         variant: "warning",
       });
       return;
     }
-    if (logForm.startTime >= logForm.endTime) {
+    if (logForm.endTime && logForm.startTime >= logForm.endTime) {
       addToast({
         title: "Invalid time range",
         message: "End time must be after start time.",
@@ -433,7 +455,7 @@ export default function ActivityDashboard({
       isManualLogInFuture({
         date: logForm.date,
         startTime: logForm.startTime,
-        endTime: logForm.endTime,
+        endTime: logForm.endTime || undefined,
       })
     ) {
       addToast({
@@ -464,7 +486,7 @@ export default function ActivityDashboard({
       date: logForm.date,
       description: logForm.description,
       startTime: logForm.startTime,
-      endTime: logForm.endTime,
+      endTime: logForm.endTime || null,
     };
     payload.categories = logForm.categories;
 
@@ -487,8 +509,12 @@ export default function ActivityDashboard({
         title: logModal.mode === "edit" ? "Log updated" : "Log created",
         message:
           logModal.mode === "edit"
-            ? "Manual activity updated."
-            : "Manual activity saved to your timeline.",
+            ? logForm.endTime
+              ? "Manual activity completed"
+              : "Manual activity updated."
+            : logForm.endTime
+              ? "Manual activity logged"
+              : "Manual activity started",
         variant: "success",
       });
       closeLogModal();
@@ -681,6 +707,11 @@ export default function ActivityDashboard({
               const commentCount = isManualLog
                 ? commentCounts[log.id] ?? 0
                 : 0;
+              const manualStatus = getManualStatus(log);
+              const isRunningManual = isManualLog && manualStatus === "RUNNING";
+              const runningDurationLabel = isRunningManual
+                ? getRunningDurationLabel(log.startAt)
+                : null;
               const avatarLetter = getAvatarLetter(log.user);
               return (
                 <div
@@ -727,6 +758,11 @@ export default function ActivityDashboard({
                       <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
                         {badgeLabel}
                       </span>
+                      {isRunningManual ? (
+                        <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-300">
+                          Running
+                        </span>
+                      ) : null}
                       <ActivityMenu
                         items={
                           isManualLog
@@ -777,9 +813,20 @@ export default function ActivityDashboard({
                       {formatTimeOnly(log.endAt)}
                     </p>
                   ) : null}
+                  {isRunningManual && log.startAt ? (
+                    <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                      Time: {formatTimeOnly(log.startAt)} • Running
+                      {runningDurationLabel ? ` • ${runningDurationLabel}` : ""}
+                    </p>
+                  ) : null}
                   {isManualLog && manualCategoryLabels.length ? (
                     <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
                       Categories: {manualCategoryLabels.join(", ")}
+                    </p>
+                  ) : null}
+                  {isManualLog ? (
+                    <p className="mt-2 text-xs text-[color:var(--color-text-subtle)]">
+                      Status: {manualStatus === "RUNNING" ? "Running" : "Completed"}
                     </p>
                   ) : null}
                 </div>
@@ -892,6 +939,7 @@ export default function ActivityDashboard({
                   name="date"
                   value={logForm.date}
                   onChange={handleLogChange}
+                  disabled={logModal.mode === "edit"}
                   min={dateBounds.min ?? undefined}
                   max={dateBounds.max ?? undefined}
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm"
@@ -907,6 +955,7 @@ export default function ActivityDashboard({
                   name="startTime"
                   value={logForm.startTime}
                   onChange={handleLogChange}
+                  disabled={logModal.mode === "edit"}
                   max={
                     logForm.date === getTodayInPSTDateString()
                       ? formatTimeOnly(new Date())
@@ -929,6 +978,9 @@ export default function ActivityDashboard({
                   }
                   className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
                 />
+                <span className="min-h-[14px] text-[11px] text-[color:var(--color-text-subtle)]">
+                  Leave empty to keep this manual activity running.
+                </span>
               </label>
             </div>
             <label className="grid gap-2 text-xs text-[color:var(--color-text-muted)]">

@@ -113,6 +113,34 @@ export async function normalizeAttendanceAutoOff(prismaClient, attendance, now =
       });
     }
 
+    const runningManualLogs = await tx.activityLog.findMany({
+      where: {
+        userId: fresh.userId,
+        type: "MANUAL",
+        endAt: null,
+        startAt: { lt: autoOffAt },
+      },
+      select: { id: true, startAt: true },
+    });
+
+    for (const log of runningManualLogs) {
+      const startAt = log.startAt instanceof Date ? log.startAt : new Date(log.startAt);
+      if (Number.isNaN(startAt.getTime()) || startAt >= autoOffAt) {
+        continue;
+      }
+      const durationSeconds = Math.max(
+        0,
+        Math.floor((autoOffAt.getTime() - startAt.getTime()) / 1000)
+      );
+      await tx.activityLog.update({
+        where: { id: log.id },
+        data: {
+          endAt: autoOffAt,
+          durationSeconds,
+        },
+      });
+    }
+
     return { id: fresh.id, outTime: autoOffAt };
   });
 }

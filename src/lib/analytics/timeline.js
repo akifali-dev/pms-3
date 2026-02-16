@@ -470,6 +470,34 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
     })
     .filter(Boolean);
 
+  const manualLogs = await prismaClient.activityLog.findMany({
+    where: {
+      userId,
+      type: "MANUAL",
+      startAt: { lte: dayWindow.end },
+      OR: [{ endAt: null }, { endAt: { gte: dayWindow.start } }],
+    },
+    select: {
+      id: true,
+      startAt: true,
+      endAt: true,
+    },
+  });
+
+  const rawManualIntervals = manualLogs
+    .map((log) => {
+      const start = normalizeDate(log.startAt);
+      const end = normalizeDate(log.endAt) ?? now;
+      if (!start || !end || end <= start) {
+        return null;
+      }
+      return clampIntervalToBounds(
+        { start, end, manualLogId: log.id, manualRunning: !log.endAt },
+        dayWindow
+      );
+    })
+    .filter(Boolean);
+
   const rawBreakIntervals = attendances
     .flatMap((attendance) => attendance.breaks ?? [])
     .map((brk) => {
@@ -508,7 +536,10 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
     })
     .filter(Boolean);
 
-  const workIntervals = intersectIntervalsWithWindows(rawWorkIntervals, dutyWindows);
+  const workIntervals = intersectIntervalsWithWindows(
+    [...rawWorkIntervals, ...rawManualIntervals],
+    dutyWindows
+  );
   const breakIntervals = intersectIntervalsWithWindows(
     [...rawBreakIntervals, ...rawTaskBreakIntervals],
     dutyWindows

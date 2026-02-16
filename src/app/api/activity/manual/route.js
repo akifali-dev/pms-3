@@ -15,6 +15,11 @@ import {
   MANUAL_LOG_CATEGORIES,
   normalizeManualCategories,
 } from "@/lib/manualLogs";
+import {
+  findConflictingManualLog,
+  findRunningManualLog,
+  withManualLogStatus,
+} from "@/lib/manualLogMutations";
 
 export async function POST(request) {
   const context = await getAuthContext();
@@ -71,6 +76,24 @@ export async function POST(request) {
     return buildError(timeError, 400);
   }
 
+  const conflict = await findConflictingManualLog(prisma, {
+    userId: context.user.id,
+    startAt,
+    endAt,
+  });
+  if (conflict) {
+    return buildError("Manual activity overlaps with another log.", 409);
+  }
+
+  if (!endAt) {
+    const runningLog = await findRunningManualLog(prisma, {
+      userId: context.user.id,
+    });
+    if (runningLog) {
+      return buildError("Finish your running manual activity before starting a new one.", 409);
+    }
+  }
+
   const activityLog = await prisma.activityLog.create({
     data: {
       description,
@@ -88,5 +111,5 @@ export async function POST(request) {
     },
   });
 
-  return buildSuccess("Activity log created.", { activityLog }, 201);
+  return buildSuccess("Activity log created.", { activityLog: withManualLogStatus(activityLog) }, 201);
 }

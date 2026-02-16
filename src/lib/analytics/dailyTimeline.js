@@ -185,8 +185,8 @@ function buildSegments({
       type = "WORK_TASK";
       label = "Task";
     } else if (activeManual) {
-      type = "WORK_MANUAL";
-      label = "Manual";
+      type = activeManual.isRunning ? "WORK_MANUAL_RUNNING" : "WORK_MANUAL";
+      label = activeManual.isRunning ? "Manual (running)" : "Manual";
     } else if (activeDuty) {
       type = "IDLE";
       label = "Idle";
@@ -379,7 +379,7 @@ async function buildUserIntervals(prismaClient, userId, windowStart, windowEnd, 
       if (!start || !end || end <= start) {
         return null;
       }
-      return { start, end };
+      return { start, end, isRunning: !log.endAt };
     })
     .filter(Boolean);
 

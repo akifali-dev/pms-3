@@ -143,18 +143,27 @@ export function buildManualLogTimes({ date, startTime, endTime }) {
   if (!normalized) {
     return { error: "Date must be valid." };
   }
+  if (!startTime) {
+    return { error: "Start time is required." };
+  }
   const startAt = zonedTimeToUtc({
     date: normalized,
     time: startTime,
     timeZone: PST_TIME_ZONE,
   });
+  if (!startAt) {
+    return { error: "Start time is required." };
+  }
+  if (!endTime) {
+    return { startAt, endAt: null, durationSeconds: 0 };
+  }
   const endAt = zonedTimeToUtc({
     date: normalized,
     time: endTime,
     timeZone: PST_TIME_ZONE,
   });
-  if (!startAt || !endAt) {
-    return { error: "Start and end time are required." };
+  if (!endAt) {
+    return { error: "End time must be valid." };
   }
   if (endAt <= startAt) {
     return { error: "End time must be after start time." };
