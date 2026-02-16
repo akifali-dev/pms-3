@@ -60,8 +60,15 @@ function formatBreakReason(reason) {
   if (!reason) {
     return "Other";
   }
-  const value = reason.toString().toLowerCase();
-  return value.charAt(0).toUpperCase() + value.slice(1);
+  const value = reason.toString();
+  if (value.includes(" & ")) {
+    return value;
+  }
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function buildBreakLabel(segment) {

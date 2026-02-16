@@ -1,5 +1,6 @@
 import { getShiftWindow, mergeIntervals } from "@/lib/dutyHours";
 import { normalizeAutoOffForAttendances, resolveAttendanceOutTime } from "@/lib/attendanceAutoOff";
+import { formatBreakTypes, normalizeBreakTypes } from "@/lib/breakTypes";
 
 const WORKING_STATUSES = new Set(["IN_PROGRESS", "DEV_TEST"]);
 
@@ -209,7 +210,7 @@ function buildSegments({
       startAt: interval.start,
       endAt: interval.end,
       type: "BREAK",
-      reason: interval.reason ?? "OTHER",
+      reason: interval.reasonLabel ?? formatBreakTypes(interval.reasons, interval.reason),
       breakType: interval.breakType ?? "ATTENDANCE",
       isWFH: isIntervalOverlapping(interval, wfhIntervals),
     });
@@ -294,7 +295,7 @@ function buildTimelineDetails({ dutyWindows, segments, breakIntervals, totals })
       : null;
 
   const pauseBreakdown = (breakIntervals ?? []).reduce((acc, brk) => {
-    const key = brk.reason ?? "OTHER";
+    const key = brk.reasonLabel ?? formatBreakTypes(brk.reasons, brk.reason);
     if (!acc[key]) {
       acc[key] = { count: 0, seconds: 0 };
     }
@@ -507,7 +508,13 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
         return null;
       }
       return clampIntervalToBounds(
-        { start, end, reason: brk.type ?? "OTHER", breakType: "ATTENDANCE" },
+        {
+          start,
+          end,
+          reasons: normalizeBreakTypes(brk.types, brk.type),
+          reasonLabel: formatBreakTypes(brk.types, brk.type),
+          breakType: "ATTENDANCE",
+        },
         dayWindow
       );
     })
@@ -519,7 +526,7 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
       startedAt: { lte: dayWindow.end },
       OR: [{ endedAt: null }, { endedAt: { gte: dayWindow.start } }],
     },
-    select: { startedAt: true, endedAt: true, reason: true },
+    select: { startedAt: true, endedAt: true, reason: true, reasons: true },
   });
 
   const rawTaskBreakIntervals = taskBreaks
@@ -530,7 +537,13 @@ export async function getUserDailyTimeline(prismaClient, userId, date, now = new
         return null;
       }
       return clampIntervalToBounds(
-        { start, end, reason: brk.reason ?? "OTHER", breakType: "TASK_PAUSE" },
+        {
+          start,
+          end,
+          reasons: normalizeBreakTypes(brk.reasons, brk.reason),
+          reasonLabel: formatBreakTypes(brk.reasons, brk.reason),
+          breakType: "TASK_PAUSE",
+        },
         dayWindow
       );
     })

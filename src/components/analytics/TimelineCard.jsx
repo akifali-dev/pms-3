@@ -44,8 +44,15 @@ function formatBreakReason(reason) {
   if (!reason) {
     return "Other";
   }
-  const value = reason.toString().toLowerCase();
-  return value.charAt(0).toUpperCase() + value.slice(1);
+  const value = reason.toString();
+  if (value.includes(" & ")) {
+    return value;
+  }
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function buildBreakLabel(segment) {
@@ -280,7 +287,7 @@ export default function TimelineCard({ user, timeline }) {
               key={reason}
               className="rounded-full border border-[color:var(--color-border)] px-3 py-1"
             >
-              {reason.toLowerCase()} · {data.count} · {formatDuration(data.seconds)}
+              {reason} · {data.count} · {formatDuration(data.seconds)}
             </span>
           ))}
         </div>

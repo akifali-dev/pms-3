@@ -8,6 +8,7 @@ import CommentThread from "@/components/comments/CommentThread";
 import { useToast } from "@/components/ui/ToastProvider";
 import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
 import { canMarkTaskDone, roles } from "@/lib/roles";
+import { BREAK_TYPES, formatBreakTypes } from "@/lib/breakTypes";
 
 const formatDurationShort = (totalSeconds = 0) => {
   const seconds = Math.max(0, Number(totalSeconds) || 0);
@@ -35,22 +36,7 @@ const formatEstimatedTime = (hoursValue = 0) => {
   return minutes > 0 ? `${minutes}m` : "0m";
 };
 
-const formatBreakReason = (reason) => {
-  switch (reason) {
-    case "NAMAZ":
-      return "Namaz";
-    case "LUNCH":
-      return "Lunch";
-    case "MEAL":
-      return "Meal";
-    case "REFRESHMENT":
-      return "Refreshment";
-    case "OTHER":
-      return "Other";
-    default:
-      return "Break";
-  }
-};
+const formatBreakReason = (reasons, fallback = null) => formatBreakTypes(reasons, fallback);
 
 const getPresenceLabel = (task) => {
   const status = task?.presenceStatusNow;
@@ -140,7 +126,7 @@ export default function TaskBoard({
   const [timeRequestActionId, setTimeRequestActionId] = useState(null);
   const [requestSubmitting, setRequestSubmitting] = useState(false);
   const [breakForm, setBreakForm] = useState({
-    reason: "NAMAZ",
+    reasons: ["NAMAZ"],
     note: "",
   });
   const [breakPanelOpen, setBreakPanelOpen] = useState(false);
@@ -480,10 +466,10 @@ export default function TaskBoard({
     if (!task?.id) {
       return;
     }
-    if (!breakForm.reason) {
+    if (!breakForm.reasons.length) {
       addToast({
-        title: "Select a reason",
-        message: "Please select a break reason.",
+        title: "Select break types",
+        message: "Please select at least one break type.",
         variant: "error",
       });
       return;
@@ -493,8 +479,8 @@ export default function TaskBoard({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        reason: breakForm.reason,
-        note: breakForm.reason === "OTHER" ? breakForm.note?.trim() : null,
+        reasons: breakForm.reasons,
+        note: breakForm.note?.trim() || null,
       }),
     });
     const data = await response.json();
@@ -1159,7 +1145,7 @@ export default function TaskBoard({
                   </div>
                   {selectedTask.activeBreak ? (
                     <p className="mt-2 text-xs text-amber-400">
-                      Paused: {formatBreakReason(selectedTask.activeBreak.reason)} (
+                      Paused: {formatBreakReason(selectedTask.activeBreak.reasons, selectedTask.activeBreak.reason)} (
                       {new Date(
                         selectedTask.activeBreak.startedAt
                       ).toLocaleTimeString([], {
@@ -1334,28 +1320,33 @@ export default function TaskBoard({
 
                 {breakPanelOpen ? (
                   <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4">
-                    <label className="flex flex-col gap-2 text-xs text-[color:var(--color-text-muted)]">
-                      Break reason
-                      <select
-                        value={breakForm.reason}
-                        onChange={(event) =>
-                          setBreakForm((prev) => ({
-                            ...prev,
-                            reason: event.target.value,
-                          }))
-                        }
-                        className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                      >
-                        <option value="NAMAZ">Namaz</option>
-                        <option value="LUNCH">Lunch</option>
-                        <option value="MEAL">Meal</option>
-                        <option value="REFRESHMENT">Refreshment</option>
-                        <option value="OTHER">Other</option>
-                      </select>
-                    </label>
-                    {breakForm.reason === "OTHER" ? (
+                    <div className="flex flex-col gap-2 text-xs text-[color:var(--color-text-muted)]">
+                      <p>Break reason</p>
+                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-input)] p-3">
+                        <div className="grid gap-1">
+                          {BREAK_TYPES.map((reason) => (
+                            <label key={reason} className="flex items-center gap-2 text-sm text-[color:var(--color-text)]">
+                              <input
+                                type="checkbox"
+                                checked={breakForm.reasons.includes(reason)}
+                                onChange={() =>
+                                  setBreakForm((prev) => ({
+                                    ...prev,
+                                    reasons: prev.reasons.includes(reason)
+                                      ? prev.reasons.filter((item) => item !== reason)
+                                      : [...prev.reasons, reason],
+                                  }))
+                                }
+                              />
+                              {formatBreakTypes([reason])}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    {breakForm.reasons.includes("OTHER") ? (
                       <label className="mt-3 flex flex-col gap-2 text-xs text-[color:var(--color-text-muted)]">
-                        Note (optional)
+                        Note
                         <textarea
                           value={breakForm.note}
                           onChange={(event) =>
