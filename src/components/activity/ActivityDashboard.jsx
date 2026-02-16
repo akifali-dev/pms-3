@@ -22,7 +22,7 @@ import {
   isManualLogDateAllowed,
   isManualLogInFuture,
 } from "@/lib/manualLogs";
-import { getDutyDate } from "@/lib/dutyHours";
+import { getTodayInPSTDateString } from "@/lib/pstDate";
 
 const periodOptions = [
   { id: "daily", label: "Daily" },
@@ -196,9 +196,8 @@ export default function ActivityDashboard({
 
   useEffect(() => {
     setIsHydrated(true);
-    const today = formatDateOnly(new Date());
-    const dutyDate = getDutyDate(new Date()) ?? today;
-    setSelectedDate(dutyDate);
+    const today = getTodayInPSTDateString();
+    setSelectedDate(today);
     setLogForm((prev) => ({ ...prev, date: today }));
   }, []);
 
@@ -336,9 +335,10 @@ export default function ActivityDashboard({
   };
 
   const openCreateLogModal = () => {
+    const today = getTodayInPSTDateString();
     setLogForm({
       categories: ["LEARNING"],
-      date: formatDateOnly(new Date()),
+      date: today,
       startTime: "",
       endTime: "",
       description: "",
@@ -908,7 +908,7 @@ export default function ActivityDashboard({
                   value={logForm.startTime}
                   onChange={handleLogChange}
                   max={
-                    logForm.date === formatDateOnly(new Date())
+                    logForm.date === getTodayInPSTDateString()
                       ? formatTimeOnly(new Date())
                       : undefined
                   }
@@ -923,7 +923,7 @@ export default function ActivityDashboard({
                   value={logForm.endTime}
                   onChange={handleLogChange}
                   max={
-                    logForm.date === formatDateOnly(new Date())
+                    logForm.date === getTodayInPSTDateString()
                       ? formatTimeOnly(new Date())
                       : undefined
                   }

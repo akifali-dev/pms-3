@@ -7,6 +7,11 @@ import PageHeader from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/ToastProvider";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import { getAttendanceAutoOffTime } from "@/lib/attendanceAutoOff";
+import {
+  formatDateInPSTDateString,
+  getTodayInPSTDateString,
+  shiftDateStringByDays,
+} from "@/lib/pstDate";
 
 const badgeOptions = [
   { id: "all", label: "All" },
@@ -28,11 +33,7 @@ const breakTypeOptions = [
 ];
 
 function formatDateForInput(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  return date.toLocaleDateString("en-CA");
+  return formatDateInPSTDateString(value);
 }
 
 function formatDisplayDate(value) {
@@ -141,33 +142,21 @@ function getRecordDurations(record) {
 }
 
 function isTodayDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const target = formatDateForInput(value);
+  if (!target) {
     return false;
   }
-  const today = new Date();
-  return (
-    date.getUTCFullYear() === today.getUTCFullYear() &&
-    date.getUTCMonth() === today.getUTCMonth() &&
-    date.getUTCDate() === today.getUTCDate()
-  );
+  return target === getTodayInPSTDateString();
 }
 
 function isEditableAttendanceDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const target = formatDateForInput(value);
+  const today = getTodayInPSTDateString();
+  if (!target || !today) {
     return false;
   }
-  const today = new Date();
-  const startOfToday = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
-  );
-  const earliest = new Date(startOfToday);
-  earliest.setUTCDate(startOfToday.getUTCDate() - 2);
-  const target = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
-  );
-  return target >= earliest && target <= startOfToday;
+  const earliest = shiftDateStringByDays(today, -2);
+  return Boolean(earliest) && target >= earliest && target <= today;
 }
 
 function isAttendanceRunning(attendance, now = new Date()) {
@@ -186,18 +175,18 @@ function isAttendanceRunning(attendance, now = new Date()) {
 }
 
 function getPresetRange(preset) {
-  const now = new Date();
-  const start = new Date(now);
-  const end = new Date(now);
+  const today = getTodayInPSTDateString();
+  const [year, month, day] = today.split("-").map((part) => Number(part));
+  const start = new Date(Date.UTC(year, month - 1, day));
+  const end = new Date(start);
 
   if (preset === "week") {
-    const day = now.getDay();
-    const diff = (day + 6) % 7;
-    start.setDate(now.getDate() - diff);
-    end.setDate(start.getDate() + 6);
+    const weekday = (start.getUTCDay() + 6) % 7;
+    start.setUTCDate(start.getUTCDate() - weekday);
+    end.setUTCDate(start.getUTCDate() + 6);
   } else if (preset === "month") {
-    start.setDate(1);
-    end.setMonth(start.getMonth() + 1, 0);
+    start.setUTCDate(1);
+    end.setUTCMonth(start.getUTCMonth() + 1, 0);
   }
 
   return {
@@ -361,12 +350,12 @@ export default function AttendanceDashboard({
   const [presenceNow, setPresenceNow] = useState(initialPresenceNow ?? null);
   const [status, setStatus] = useState({ loading: false, error: null });
   const [activeBadge, setActiveBadge] = useState("all");
-  const [activePreset, setActivePreset] = useState(initialRange?.preset ?? "week");
+  const [activePreset, setActivePreset] = useState(initialRange?.preset ?? "today");
   const [range, setRange] = useState(() => {
     if (initialRange?.from && initialRange?.to) {
       return { from: initialRange.from, to: initialRange.to };
     }
-    return getPresetRange("week");
+    return getPresetRange("today");
   });
   const [selectedUser, setSelectedUser] = useState(null);
   const [userQuery, setUserQuery] = useState("");
@@ -376,7 +365,7 @@ export default function AttendanceDashboard({
   const [modalState, setModalState] = useState({ open: false, mode: "create" });
   const [activeRecord, setActiveRecord] = useState(null);
   const [form, setForm] = useState({
-    date: formatDateForInput(new Date()),
+    date: "",
     inTime: "",
     outTime: "",
     note: "",
@@ -408,6 +397,17 @@ export default function AttendanceDashboard({
     () => setIsFormUserMenuOpen(false),
     isFormUserMenuOpen
   );
+
+  useEffect(() => {
+    const today = getTodayInPSTDateString();
+    setForm((prev) => (prev.date ? prev : { ...prev, date: today }));
+    setRange((prev) => {
+      if (prev.from && prev.to) {
+        return prev;
+      }
+      return { from: today, to: today };
+    });
+  }, []);
 
   const filteredUsers = useMemo(() => {
     const query = userQuery.toLowerCase();
@@ -535,7 +535,7 @@ export default function AttendanceDashboard({
   const openCreateModal = () => {
     const defaultUser = selectedUser ?? currentUser;
     setForm({
-      date: range.from || formatDateForInput(new Date()),
+      date: getTodayInPSTDateString(),
       inTime: "",
       outTime: "",
       note: "",

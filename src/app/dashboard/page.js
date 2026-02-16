@@ -5,6 +5,7 @@ import AnalyticsDashboardPanel from "@/components/analytics/AnalyticsDashboardPa
 import { getSession } from "@/lib/session";
 import { getRoleById, roles } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
+import { getTodayInPSTDateString } from "@/lib/pstDate";
 
 const metricDefinitions = [
   {
@@ -190,6 +191,7 @@ export default async function DashboardPage() {
           users={users}
           currentUser={currentUser}
           isManager={isFullVisibility || isExecutiveSummary}
+          todayPST={getTodayInPSTDateString()}
         />
       </div>
 

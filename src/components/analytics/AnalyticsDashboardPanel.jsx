@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import DailyTimelineChart from "@/components/analytics/DailyTimelineChart";
-import { DEFAULT_TIME_ZONE, formatDateInTimeZone } from "@/lib/attendanceTimes";
-import { getDutyDate } from "@/lib/dutyHours";
+import { getTodayInPSTDateString } from "@/lib/pstDate";
 
 const periodOptions = [
   { id: "daily", label: "Daily" },
@@ -25,13 +24,15 @@ const AnalyticsResults = dynamic(
   }
 );
 
-function formatDateOnly(value) {
-  return formatDateInTimeZone(value, DEFAULT_TIME_ZONE) ?? "";
-}
 
-export default function AnalyticsDashboardPanel({ users, currentUser, isManager }) {
+export default function AnalyticsDashboardPanel({
+  users,
+  currentUser,
+  isManager,
+  todayPST = "",
+}) {
   const [period, setPeriod] = useState("daily");
-  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedDate, setSelectedDate] = useState(todayPST || getTodayInPSTDateString());
   const [selectedUser, setSelectedUser] = useState(null);
   const [userQuery, setUserQuery] = useState("");
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -39,10 +40,6 @@ export default function AnalyticsDashboardPanel({ users, currentUser, isManager 
 
   useOutsideClick(userMenuRef, () => setIsUserMenuOpen(false), isUserMenuOpen);
 
-  useEffect(() => {
-    const today = formatDateOnly(new Date());
-    setSelectedDate(getDutyDate(new Date()) ?? today);
-  }, []);
 
   const filteredUsers = useMemo(() => {
     const query = userQuery.toLowerCase();

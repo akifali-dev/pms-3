@@ -8,6 +8,7 @@ import {
 } from "@/lib/dutyHours";
 import { getTimeZoneNow } from "@/lib/attendanceTimes";
 import { normalizeAutoOffForAttendances } from "@/lib/attendanceAutoOff";
+import { getTodayInPSTDateString } from "@/lib/pstDate";
 
 function getWeekRange() {
   const now = new Date();
@@ -34,6 +35,7 @@ export default async function AttendancePage() {
   let presenceNow = null;
 
   const { start, end } = getWeekRange();
+  const todayPST = getTodayInPSTDateString();
 
   if (hasDatabase && session?.email) {
     currentUser = await prisma.user.findUnique({
@@ -111,9 +113,9 @@ export default async function AttendancePage() {
       currentUser={currentUser}
       isLeader={isLeader}
       initialRange={{
-        preset: "week",
-        from: start.toISOString().slice(0, 10),
-        to: end.toISOString().slice(0, 10),
+        preset: "today",
+        from: todayPST,
+        to: todayPST,
       }}
     />
   );

@@ -8,6 +8,7 @@ import { getMilestoneStatus } from "@/lib/milestoneProgress";
 import PageHeader from "@/components/layout/PageHeader";
 import Modal from "@/components/ui/Modal";
 import ViewToggle from "@/components/ui/ViewToggle";
+import { getTodayInPSTDateString } from "@/lib/pstDate";
 
 const VIEW_PREFERENCE_KEY = "pms.milestones.view";
 
@@ -135,10 +136,11 @@ export default function MilestonesOverview() {
         message: "Timeline checkpoint added.",
         variant: "success",
       });
+      const today = getTodayInPSTDateString();
       setMilestoneForm({
         title: "",
-        startDate: "",
-        endDate: "",
+        startDate: today,
+        endDate: today,
         projectId: projects[0]?.id ?? "",
       });
       setIsModalOpen(false);
@@ -210,7 +212,15 @@ export default function MilestonesOverview() {
           <ActionButton
             label="Create milestone"
             variant="success"
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              const today = getTodayInPSTDateString();
+              setMilestoneForm((prev) => ({
+                ...prev,
+                startDate: today,
+                endDate: today,
+              }));
+              setIsModalOpen(true);
+            }}
           />
         }
         viewToggle={
