@@ -84,6 +84,15 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
 
   const handleMilestoneSubmit = async (event) => {
     event.preventDefault();
+    if (!canManageMilestones) {
+      addToast({
+        title: "Not allowed",
+        message: "Not allowed",
+        variant: "error",
+      });
+      return;
+    }
+
     if (!milestoneForm.title.trim()) {
       addToast({
         title: "Milestone title needed",

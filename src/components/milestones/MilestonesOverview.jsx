@@ -9,13 +9,14 @@ import PageHeader from "@/components/layout/PageHeader";
 import Modal from "@/components/ui/Modal";
 import ViewToggle from "@/components/ui/ViewToggle";
 import { getTodayInPSTDateString } from "@/lib/pstDate";
+import { canCreateMilestones } from "@/lib/roles";
 
 const VIEW_PREFERENCE_KEY = "pms.milestones.view";
 
 const buildErrorMessage = (data) =>
   data?.error ?? data?.message ?? "Unable to load milestones.";
 
-export default function MilestonesOverview() {
+export default function MilestonesOverview({ role }) {
   const { addToast } = useToast();
   const [milestones, setMilestones] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -25,6 +26,7 @@ export default function MilestonesOverview() {
   const [viewMode, setViewMode] = useState("grid");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const canCreate = useMemo(() => canCreateMilestones(role), [role]);
   const [milestoneForm, setMilestoneForm] = useState({
     title: "",
     startDate: "",
@@ -99,12 +101,21 @@ export default function MilestonesOverview() {
   }, [addToast]);
 
   useEffect(() => {
-    if (!isModalOpen) return;
+    if (!isModalOpen || !canCreate) return;
     loadProjects();
-  }, [isModalOpen, loadProjects]);
+  }, [canCreate, isModalOpen, loadProjects]);
 
   const handleCreateMilestone = async (event) => {
     event.preventDefault();
+    if (!canCreate) {
+      addToast({
+        title: "Not allowed",
+        message: "Not allowed",
+        variant: "error",
+      });
+      return;
+    }
+
     if (!milestoneForm.title.trim() || !milestoneForm.projectId) {
       addToast({
         title: "Milestone details needed",
@@ -209,19 +220,21 @@ export default function MilestonesOverview() {
         title="Global milestone tracking"
         subtitle="Monitor active checkpoints across every project in the workspace."
         actions={
-          <ActionButton
-            label="Create milestone"
-            variant="success"
-            onClick={() => {
-              const today = getTodayInPSTDateString();
-              setMilestoneForm((prev) => ({
-                ...prev,
-                startDate: today,
-                endDate: today,
-              }));
-              setIsModalOpen(true);
-            }}
-          />
+          canCreate ? (
+            <ActionButton
+              label="Create milestone"
+              variant="success"
+              onClick={() => {
+                const today = getTodayInPSTDateString();
+                setMilestoneForm((prev) => ({
+                  ...prev,
+                  startDate: today,
+                  endDate: today,
+                }));
+                setIsModalOpen(true);
+              }}
+            />
+          ) : null
         }
         viewToggle={
           <ViewToggle value={viewMode} onChange={setViewMode} />
