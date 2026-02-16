@@ -8,10 +8,10 @@ import {
 } from "@/lib/api";
 import {
   computeAttendanceDurationsForRecord,
-  getDutyDate,
   getUserPresenceNow,
 } from "@/lib/dutyHours";
 import { getTimeZoneNow, normalizeAttendanceTimes } from "@/lib/attendanceTimes";
+import { getTodayInPSTDateString, shiftDateStringByDays } from "@/lib/pstDate";
 
 function isLeader(role) {
   return PROJECT_MANAGEMENT_ROLES.includes(role);
@@ -40,13 +40,13 @@ function parseDateTime(value) {
 }
 
 function getEditWindow() {
-  const dutyDate = getDutyDate(getTimeZoneNow());
-  const today = normalizeDateOnly(dutyDate ?? new Date());
-  if (!today) {
+  const todayString = getTodayInPSTDateString();
+  const earliestString = shiftDateStringByDays(todayString, -2);
+  const today = normalizeDateOnly(todayString);
+  const earliest = normalizeDateOnly(earliestString);
+  if (!today || !earliest) {
     return null;
   }
-  const earliest = new Date(today);
-  earliest.setUTCDate(today.getUTCDate() - 2);
   return { earliest, today };
 }
 

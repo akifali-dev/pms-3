@@ -8,6 +8,7 @@ import Modal from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/ToastProvider";
 import MilestoneCard from "@/components/milestones/MilestoneCard";
 import PageHeader from "@/components/layout/PageHeader";
+import { getTodayInPSTDateString } from "@/lib/pstDate";
 
 const formatDateInput = (value) => {
   if (!value) return "";
@@ -77,7 +78,8 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
   }, [loadProject]);
 
   const resetMilestoneForm = () => {
-    setMilestoneForm({ title: "", startDate: "", endDate: "" });
+    const today = getTodayInPSTDateString();
+    setMilestoneForm({ title: "", startDate: today, endDate: today });
   };
 
   const handleMilestoneSubmit = async (event) => {
@@ -156,7 +158,10 @@ export default function ProjectDetailView({ projectId, canManageMilestones }) {
             <ActionButton
               label="Create milestone"
               variant="success"
-              onClick={() => setModalOpen(true)}
+              onClick={() => {
+                resetMilestoneForm();
+                setModalOpen(true);
+              }}
             />
           ) : null
         }

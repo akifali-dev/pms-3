@@ -1,9 +1,9 @@
 import {
-  DEFAULT_TIME_ZONE,
   parseDateInput,
   zonedTimeToUtc,
 } from "@/lib/attendanceTimes";
 import { getDutyDate } from "@/lib/dutyHours";
+import { PST_TIME_ZONE } from "@/lib/pstDate";
 
 export const MANUAL_LOG_CATEGORIES = ["LEARNING", "RESEARCH", "OTHER"];
 
@@ -37,7 +37,7 @@ function formatDateParts(parts) {
   return `${year}-${month}-${day}`;
 }
 
-function normalizeManualDate(value, timeZone = DEFAULT_TIME_ZONE) {
+function normalizeManualDate(value, timeZone = PST_TIME_ZONE) {
   const parts = parseDateInput(value, timeZone);
   if (!parts) {
     return null;
@@ -63,7 +63,7 @@ function addDaysToDateString(dateString, days) {
 
 export function getManualLogDateBounds(
   baseDate = new Date(),
-  timeZone = DEFAULT_TIME_ZONE
+  timeZone = PST_TIME_ZONE
 ) {
   const dutyDate = getDutyDate(baseDate, timeZone);
   const max = normalizeManualDate(dutyDate ?? baseDate, timeZone);
@@ -77,7 +77,7 @@ export function getManualLogDateBounds(
 export function isManualLogDateAllowed(
   date,
   baseDate = new Date(),
-  timeZone = DEFAULT_TIME_ZONE
+  timeZone = PST_TIME_ZONE
 ) {
   const normalized = normalizeManualDate(date, timeZone);
   if (!normalized) {
@@ -93,7 +93,7 @@ export function isManualLogDateAllowed(
 export function isManualLogInFuture(
   { date, startTime, endTime },
   baseDate = new Date(),
-  timeZone = DEFAULT_TIME_ZONE
+  timeZone = PST_TIME_ZONE
 ) {
   const normalized = normalizeManualDate(date, timeZone);
   if (!normalized) {
@@ -126,7 +126,7 @@ export function isManualLogInFuture(
   return false;
 }
 
-export function buildManualLogDate(dateValue, timeZone = DEFAULT_TIME_ZONE) {
+export function buildManualLogDate(dateValue, timeZone = PST_TIME_ZONE) {
   const normalized = normalizeManualDate(dateValue, timeZone);
   if (!normalized) {
     return null;
@@ -146,12 +146,12 @@ export function buildManualLogTimes({ date, startTime, endTime }) {
   const startAt = zonedTimeToUtc({
     date: normalized,
     time: startTime,
-    timeZone: DEFAULT_TIME_ZONE,
+    timeZone: PST_TIME_ZONE,
   });
   const endAt = zonedTimeToUtc({
     date: normalized,
     time: endTime,
-    timeZone: DEFAULT_TIME_ZONE,
+    timeZone: PST_TIME_ZONE,
   });
   if (!startAt || !endAt) {
     return { error: "Start and end time are required." };

@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import {
   computeAttendanceDurationsForRecord,
-  getDutyDate,
   getUserPresenceNow,
 } from "@/lib/dutyHours";
 import { getTimeZoneNow, normalizeAttendanceTimes } from "@/lib/attendanceTimes";
+import { getTodayInPSTDateString, shiftDateStringByDays } from "@/lib/pstDate";
 import { normalizeAutoOffForAttendances } from "@/lib/attendanceAutoOff";
 import {
   PROJECT_MANAGEMENT_ROLES,
@@ -48,13 +48,13 @@ function normalizeDateRange(from, to) {
 }
 
 function getEditWindow() {
-  const dutyDate = getDutyDate(getTimeZoneNow());
-  const today = normalizeDateOnly(dutyDate ?? new Date());
-  if (!today) {
+  const todayString = getTodayInPSTDateString();
+  const earliestString = shiftDateStringByDays(todayString, -2);
+  const today = normalizeDateOnly(todayString);
+  const earliest = normalizeDateOnly(earliestString);
+  if (!today || !earliest) {
     return null;
   }
-  const earliest = new Date(today);
-  earliest.setUTCDate(today.getUTCDate() - 2);
   return { earliest, today };
 }
 
