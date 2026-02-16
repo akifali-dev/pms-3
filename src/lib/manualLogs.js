@@ -1,8 +1,10 @@
+import { zonedTimeToUtc } from "@/lib/attendanceTimes";
 import {
-  parseDateInput,
-  zonedTimeToUtc,
-} from "@/lib/attendanceTimes";
-import { getDutyDate } from "@/lib/dutyHours";
+  getTodayKey,
+  isDateKeyInRange,
+  shiftDateKey,
+  toDateKey,
+} from "@/lib/dateKeys";
 import { PST_TIME_ZONE } from "@/lib/pstDate";
 
 export const MANUAL_LOG_CATEGORIES = ["LEARNING", "RESEARCH", "OTHER"];
@@ -27,50 +29,19 @@ export function normalizeManualCategories(value) {
   return unique;
 }
 
-function formatDateParts(parts) {
-  if (!parts) {
-    return null;
-  }
-  const year = String(parts.year).padStart(4, "0");
-  const month = String(parts.month).padStart(2, "0");
-  const day = String(parts.day).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function normalizeManualDate(value, timeZone = PST_TIME_ZONE) {
-  const parts = parseDateInput(value, timeZone);
-  if (!parts) {
-    return null;
-  }
-  return formatDateParts(parts);
-}
-
-function addDaysToDateString(dateString, days) {
-  const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) {
-    return null;
-  }
-  const base = new Date(
-    Date.UTC(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3])
-    )
-  );
-  base.setUTCDate(base.getUTCDate() + days);
-  return base.toISOString().slice(0, 10);
+  return toDateKey(value, timeZone);
 }
 
 export function getManualLogDateBounds(
   baseDate = new Date(),
   timeZone = PST_TIME_ZONE
 ) {
-  const dutyDate = getDutyDate(baseDate, timeZone);
-  const max = normalizeManualDate(dutyDate ?? baseDate, timeZone);
+  const max = getTodayKey(timeZone, baseDate);
   if (!max) {
     return { min: null, max: null };
   }
-  const min = addDaysToDateString(max, -2);
+  const min = shiftDateKey(max, -2);
   return { min, max };
 }
 
@@ -84,10 +55,7 @@ export function isManualLogDateAllowed(
     return false;
   }
   const { min, max } = getManualLogDateBounds(baseDate, timeZone);
-  if (!min || !max) {
-    return false;
-  }
-  return normalized >= min && normalized <= max;
+  return isDateKeyInRange(normalized, min, max);
 }
 
 export function isManualLogInFuture(
@@ -99,8 +67,7 @@ export function isManualLogInFuture(
   if (!normalized) {
     return false;
   }
-  const dutyDate = getDutyDate(baseDate, timeZone);
-  const today = normalizeManualDate(dutyDate ?? baseDate, timeZone);
+  const today = getTodayKey(timeZone, baseDate);
   if (!today) {
     return false;
   }
