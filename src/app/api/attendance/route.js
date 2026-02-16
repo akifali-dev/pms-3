@@ -4,7 +4,7 @@ import {
   getUserPresenceNow,
 } from "@/lib/dutyHours";
 import { getTimeZoneNow, normalizeAttendanceTimes } from "@/lib/attendanceTimes";
-import { getTodayInPSTDateString, shiftDateStringByDays } from "@/lib/pstDate";
+import { dateKeyToUtcDate, isDateKeyInRange, shiftDateKey, toDateKey } from "@/lib/dateKeys";
 import { normalizeAutoOffForAttendances } from "@/lib/attendanceAutoOff";
 import {
   PROJECT_MANAGEMENT_ROLES,
@@ -19,14 +19,11 @@ function isLeader(role) {
 }
 
 function normalizeDateOnly(value) {
-  if (!value) {
+  const dateKey = toDateKey(value);
+  if (!dateKey) {
     return null;
   }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
+  return dateKeyToUtcDate(dateKey);
 }
 
 function normalizeDateRange(from, to) {
@@ -48,11 +45,12 @@ function normalizeDateRange(from, to) {
 }
 
 function getEditWindow() {
-  const todayString = getTodayInPSTDateString();
-  const earliestString = shiftDateStringByDays(todayString, -2);
-  const today = normalizeDateOnly(todayString);
-  const earliest = normalizeDateOnly(earliestString);
-  if (!today || !earliest) {
+  const today = toDateKey(new Date());
+  if (!today) {
+    return null;
+  }
+  const earliest = shiftDateKey(today, -2);
+  if (!earliest) {
     return null;
   }
   return { earliest, today };
@@ -60,10 +58,11 @@ function getEditWindow() {
 
 function isDateEditable(date) {
   const window = getEditWindow();
-  if (!window || !date) {
+  const targetKey = toDateKey(date);
+  if (!window || !targetKey) {
     return false;
   }
-  return date >= window.earliest && date <= window.today;
+  return isDateKeyInRange(targetKey, window.earliest, window.today);
 }
 
 function parseDateTime(value) {
