@@ -1,11 +1,11 @@
-import { zonedTimeToUtc } from "@/lib/attendanceTimes";
+import { isDateKeyInRange, shiftDateKey } from "@/lib/dateKeys";
 import {
-  getTodayKey,
-  isDateKeyInRange,
-  shiftDateKey,
-  toDateKey,
-} from "@/lib/dateKeys";
-import { PST_TIME_ZONE } from "@/lib/pstDate";
+  formatTimeInTZ,
+  makeZonedDateTime,
+  MANUAL_LOG_TIME_ZONE,
+  normalizeTimeString,
+  toDateKeyInTZ,
+} from "@/lib/manualLogDateTime";
 
 export const MANUAL_LOG_CATEGORIES = ["LEARNING", "RESEARCH", "OTHER"];
 
@@ -29,15 +29,19 @@ export function normalizeManualCategories(value) {
   return unique;
 }
 
-function normalizeManualDate(value, timeZone = PST_TIME_ZONE) {
-  return toDateKey(value, timeZone);
+function normalizeManualDate(value, timeZone = MANUAL_LOG_TIME_ZONE) {
+  return toDateKeyInTZ(value, timeZone);
+}
+
+export function getManualTodayDateKey(baseDate = new Date(), timeZone = MANUAL_LOG_TIME_ZONE) {
+  return toDateKeyInTZ(baseDate, timeZone);
 }
 
 export function getManualLogDateBounds(
   baseDate = new Date(),
-  timeZone = PST_TIME_ZONE
+  timeZone = MANUAL_LOG_TIME_ZONE
 ) {
-  const max = getTodayKey(timeZone, baseDate);
+  const max = toDateKeyInTZ(baseDate, timeZone);
   if (!max) {
     return { min: null, max: null };
   }
@@ -48,7 +52,7 @@ export function getManualLogDateBounds(
 export function isManualLogDateAllowed(
   date,
   baseDate = new Date(),
-  timeZone = PST_TIME_ZONE
+  timeZone = MANUAL_LOG_TIME_ZONE
 ) {
   const normalized = normalizeManualDate(date, timeZone);
   if (!normalized) {
@@ -61,13 +65,13 @@ export function isManualLogDateAllowed(
 export function isManualLogInFuture(
   { date, startTime, endTime },
   baseDate = new Date(),
-  timeZone = PST_TIME_ZONE
+  timeZone = MANUAL_LOG_TIME_ZONE
 ) {
   const normalized = normalizeManualDate(date, timeZone);
   if (!normalized) {
     return false;
   }
-  const today = getTodayKey(timeZone, baseDate);
+  const today = toDateKeyInTZ(baseDate, timeZone);
   if (!today) {
     return false;
   }
@@ -79,55 +83,59 @@ export function isManualLogInFuture(
   }
   const now = baseDate instanceof Date ? baseDate : new Date(baseDate);
   const startAt = startTime
-    ? zonedTimeToUtc({ date: normalized, time: startTime, timeZone })
+    ? makeZonedDateTime({ dateKey: normalized, timeStr: startTime, tz: timeZone })
     : null;
   const endAt = endTime
-    ? zonedTimeToUtc({ date: normalized, time: endTime, timeZone })
+    ? makeZonedDateTime({ dateKey: normalized, timeStr: endTime, tz: timeZone })
     : null;
-  if (startAt && startAt > now) {
+  if (startAt && startAt.getTime() > now.getTime()) {
     return true;
   }
-  if (endAt && endAt > now) {
+  if (endAt && endAt.getTime() > now.getTime()) {
     return true;
   }
   return false;
 }
 
-export function buildManualLogDate(dateValue, timeZone = PST_TIME_ZONE) {
+export function buildManualLogDate(dateValue, timeZone = MANUAL_LOG_TIME_ZONE) {
   const normalized = normalizeManualDate(dateValue, timeZone);
   if (!normalized) {
     return null;
   }
-  return zonedTimeToUtc({
-    date: normalized,
-    time: "00:00",
-    timeZone,
-  });
+  return makeZonedDateTime({ dateKey: normalized, timeStr: "00:00", tz: timeZone });
 }
 
 export function buildManualLogTimes({ date, startTime, endTime }) {
-  const normalized = normalizeManualDate(date);
+  const normalized = normalizeManualDate(date, MANUAL_LOG_TIME_ZONE);
   if (!normalized) {
     return { error: "Date must be valid." };
   }
-  if (!startTime) {
+  const normalizedStartTime = normalizeTimeString(startTime);
+  if (!normalizedStartTime) {
     return { error: "Start time is required." };
   }
-  const startAt = zonedTimeToUtc({
-    date: normalized,
-    time: startTime,
-    timeZone: PST_TIME_ZONE,
+  const startAt = makeZonedDateTime({
+    dateKey: normalized,
+    timeStr: normalizedStartTime,
+    tz: MANUAL_LOG_TIME_ZONE,
   });
   if (!startAt) {
     return { error: "Start time is required." };
   }
   if (!endTime) {
-    return { startAt, endAt: null, durationSeconds: 0 };
+    return {
+      startAt,
+      endAt: null,
+      durationSeconds: 0,
+      normalizedStartTime,
+      normalizedEndTime: null,
+    };
   }
-  const endAt = zonedTimeToUtc({
-    date: normalized,
-    time: endTime,
-    timeZone: PST_TIME_ZONE,
+  const normalizedEndTime = normalizeTimeString(endTime);
+  const endAt = makeZonedDateTime({
+    dateKey: normalized,
+    timeStr: normalizedEndTime,
+    tz: MANUAL_LOG_TIME_ZONE,
   });
   if (!endAt) {
     return { error: "End time must be valid." };
@@ -139,5 +147,9 @@ export function buildManualLogTimes({ date, startTime, endTime }) {
     0,
     Math.floor((endAt.getTime() - startAt.getTime()) / 1000)
   );
-  return { startAt, endAt, durationSeconds };
+  return { startAt, endAt, durationSeconds, normalizedStartTime, normalizedEndTime };
+}
+
+export function formatManualLogTime(value, timeZone = MANUAL_LOG_TIME_ZONE) {
+  return formatTimeInTZ(value, timeZone);
 }
