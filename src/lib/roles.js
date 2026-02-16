@@ -152,3 +152,13 @@ export function canMarkTaskDone(roleId) {
   const normalized = normalizeRoleId(roleId);
   return taskPermissions[normalized]?.canMarkDone ?? false;
 }
+
+export function canCreateMilestones(roleId) {
+  const normalized = normalizeRoleId(roleId);
+  return [roles.PM, roles.CTO].includes(normalized);
+}
+
+export function canCreateTasks(roleId) {
+  const normalized = normalizeRoleId(roleId);
+  return [roles.PM, roles.CTO].includes(normalized);
+}

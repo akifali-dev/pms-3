@@ -8,7 +8,7 @@ import TaskBoard from "@/components/tasks/TaskBoard";
 import PageHeader from "@/components/layout/PageHeader";
 import { TASK_STATUSES } from "@/lib/kanban";
 import { TASK_TYPE_CHECKLISTS } from "@/lib/taskChecklists";
-import { roles } from "@/lib/roles";
+import { canCreateTasks, normalizeRoleId, roles } from "@/lib/roles";
 import {
   getMilestoneCapacity,
   getMilestoneStatus,
@@ -46,6 +46,8 @@ export default function MilestoneDetailView({
     () => getMilestoneStatus(milestone?.startDate, milestone?.endDate),
     [milestone?.endDate, milestone?.startDate]
   );
+  const normalizedRole = useMemo(() => normalizeRoleId(role), [role]);
+  const canCreateTask = useMemo(() => canCreateTasks(normalizedRole), [normalizedRole]);
   const milestoneCapacity = useMemo(() => {
     const plannedMinutes = tasks.reduce(
       (sum, task) => sum + getTaskEstimatedMinutes(task),
@@ -59,8 +61,8 @@ export default function MilestoneDetailView({
   }, [milestone?.endDate, milestone?.startDate, tasks]);
   const canManageAssignments = useMemo(
     () =>
-      [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV].includes(role),
-    [role]
+      [roles.CEO, roles.PM, roles.CTO, roles.SENIOR_DEV].includes(normalizedRole),
+    [normalizedRole]
   );
 
   const loadMilestone = useCallback(async () => {
@@ -211,6 +213,16 @@ export default function MilestoneDetailView({
 
   const handleTaskSubmit = async (event) => {
     event.preventDefault();
+
+    if (!editingTaskId && !canCreateTask) {
+      addToast({
+        title: "Not allowed",
+        message: "Not allowed",
+        variant: "error",
+      });
+      return;
+    }
+
     if (!taskForm.title.trim() || !taskForm.description.trim()) {
       addToast({
         title: "Task details needed",
@@ -310,14 +322,16 @@ export default function MilestoneDetailView({
         }
         backLabel="Back to milestones"
         actions={
-          <ActionButton
-            label="Create task"
-            variant="success"
-            onClick={() => {
-              resetTaskForm();
-              setIsModalOpen(true);
-            }}
-          />
+          canCreateTask ? (
+            <ActionButton
+              label="Create task"
+              variant="success"
+              onClick={() => {
+                resetTaskForm();
+                setIsModalOpen(true);
+              }}
+            />
+          ) : null
         }
       />
 

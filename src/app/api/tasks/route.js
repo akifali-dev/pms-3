@@ -1,13 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import {
-  ADMIN_ROLES,
   buildError,
   buildSuccess,
   ensureAuthenticated,
-  ensureRole,
   getAuthContext,
   isAdminRole,
   isManagementRole,
+  WORK_ITEM_CREATION_ROLES,
 } from "@/lib/api";
 import { TASK_STATUSES } from "@/lib/kanban";
 import { getChecklistForTaskType } from "@/lib/taskChecklists";
@@ -137,10 +136,8 @@ export async function POST(request) {
     return authError;
   }
 
-  const allowedRoles = [...ADMIN_ROLES, "DEVELOPER"];
-  const roleError = ensureRole(context.role, allowedRoles);
-  if (roleError) {
-    return roleError;
+  if (!WORK_ITEM_CREATION_ROLES.includes(context.role)) {
+    return buildError("You are not allowed to create tasks.", 403);
   }
 
   const body = await request.json();
