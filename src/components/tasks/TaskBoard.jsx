@@ -10,7 +10,7 @@ import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
 import { canMarkTaskDone, roles } from "@/lib/roles";
 import { BREAK_TYPES, formatBreakTypes } from "@/lib/breakTypes";
 
-const COLLAPSED_COLUMN_WIDTH = 56;
+const COLLAPSED_COLUMN_WIDTH = 64;
 const DEFAULT_COLUMN_WIDTH = 320;
 const MAX_COLUMN_WIDTH = 560;
 
@@ -1091,6 +1091,8 @@ export default function TaskBoard({
         {TASK_STATUSES.map((status) => {
           const pref = columnPrefs?.[status.id] ?? {};
           const isCollapsed = Boolean(pref.collapsed);
+          const isResizing = resizeState?.statusId === status.id;
+          const taskCount = groupedTasks[status.id]?.length ?? 0;
           const expandedWidth = Math.min(
             MAX_COLUMN_WIDTH,
             Math.max(
@@ -1103,8 +1105,16 @@ export default function TaskBoard({
           return (
           <div
             key={status.id}
-            style={{ width, minWidth: width }}
-            className={`relative space-y-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 transition ${
+            style={{
+              width,
+              minWidth: width,
+              maxWidth: width,
+              willChange: "width",
+              transition: isResizing
+                ? "none"
+                : "width 180ms ease, min-width 180ms ease, max-width 180ms ease",
+            }}
+            className={`relative flex-none rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 ${
               dragOverStatus === status.id
                 ? "border-[color:var(--color-accent)] bg-[color:var(--color-card)]"
                 : ""
@@ -1116,14 +1126,16 @@ export default function TaskBoard({
             onDragLeave={() => setDragOverStatus(null)}
             onDrop={(event) => handleDrop(event, status.id)}
           >
-            <div className="flex items-start justify-between gap-2">
-              <h3 className={`text-sm font-semibold text-[color:var(--color-text)] ${isCollapsed ? "[writing-mode:vertical-rl] rotate-180" : ""}`}>
-                {status.label}
-              </h3>
-              <div className="flex items-center gap-1">
-                <span className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)]">
-                  {groupedTasks[status.id]?.length ?? 0}
+            <div className="mb-3 flex h-8 items-center justify-between gap-2 overflow-hidden">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <h3 className={`truncate font-semibold text-[color:var(--color-text)] ${isCollapsed ? "text-xs" : "text-sm"}`}>
+                  {status.label}
+                </h3>
+                <span className="inline-flex h-5 min-w-5 max-w-10 items-center justify-center overflow-hidden rounded-full border border-[color:var(--color-border)] px-1.5 text-[11px] leading-none text-[color:var(--color-text-muted)]">
+                  {taskCount}
                 </span>
+              </div>
+              <div className="shrink-0">
                 {isCollapsed ? (
                   <button
                     type="button"
@@ -1228,7 +1240,7 @@ export default function TaskBoard({
                   </div>
                 );
               })}
-              {(groupedTasks[status.id] ?? []).length === 0 && (
+              {taskCount === 0 && (
                 <p className="text-xs text-[color:var(--color-text-subtle)]">
                   No tasks here.
                 </p>
@@ -1238,7 +1250,7 @@ export default function TaskBoard({
               role="separator"
               aria-label={`Resize ${status.label} column`}
               className={`group absolute right-0 top-0 h-full w-2 cursor-col-resize rounded-r-2xl transition ${
-                resizeState?.statusId === status.id
+                isResizing
                   ? "bg-[color:var(--color-accent-muted)]"
                   : "hover:bg-[color:var(--color-accent-muted)]"
               }`}
