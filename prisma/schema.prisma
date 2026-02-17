@@ -19,10 +19,25 @@ enum TaskStatus {
   BACKLOG
   READY
   IN_PROGRESS
+  ON_HOLD
   DEV_TEST
   TESTING
   DONE
   REJECTED
+  BLOCKED
+}
+
+enum TaskBlockedType {
+  CLIENT
+  TEAM
+  OTHER
+}
+
+enum TaskHoldReason {
+  SWITCH_TASK
+  BREAK
+  WAITING
+  OTHER
 }
 
 enum TaskType {
@@ -161,6 +176,10 @@ model Task {
   reworkCount    Int            @default(0)
   totalTimeSpent Int            @default(0)
   lastStartedAt  DateTime?
+  blockedReason  String?
+  blockedType    TaskBlockedType?
+  holdReason     TaskHoldReason?
+  holdNote       String?
   checklistItems ChecklistItem[]
   statusHistory  TaskStatusHistory[]
   timeLogs       TaskTimeLog[]

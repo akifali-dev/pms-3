@@ -5,7 +5,7 @@ import { formatBreakTypes, normalizeBreakTypes } from "@/lib/breakTypes";
 
 const TIME_ZONE = "Asia/Karachi";
 const TICK_HOURS = 2;
-const WORKING_STATUSES = new Set(["IN_PROGRESS", "DEV_TEST"]);
+const WORKING_STATUSES = new Set(["IN_PROGRESS"]);
 const DEV_ROLES = new Set(["DEVELOPER", "SENIOR_DEVELOPER"]);
 const MANAGEMENT_ROLES = new Set(["CEO", "PM", "CTO"]);
 

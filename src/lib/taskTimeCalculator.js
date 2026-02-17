@@ -6,7 +6,7 @@ import {
   mergeIntervals,
 } from "@/lib/dutyHours";
 
-const WORKING_STATUSES = new Set(["IN_PROGRESS", "DEV_TEST"]);
+const WORKING_STATUSES = new Set(["IN_PROGRESS"]);
 
 function normalizeDate(value) {
   if (!value) {

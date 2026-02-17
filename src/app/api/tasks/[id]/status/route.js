@@ -6,7 +6,7 @@ import {
   getAuthContext,
   isManagementRole,
 } from "@/lib/api";
-import { getStatusLabel, isValidTransition } from "@/lib/kanban";
+import { canTransition, getStatusLabel } from "@/lib/kanban";
 import { computeTaskSpentTime } from "@/lib/taskTimeCalculator";
 import {
   createNotification,
@@ -19,7 +19,9 @@ import {
   endWorkSession,
 } from "@/lib/taskWorkSessions";
 
-const ACTIVE_WORK_STATUSES = new Set(["IN_PROGRESS", "DEV_TEST"]);
+const ACTIVE_WORK_STATUSES = new Set(["IN_PROGRESS"]);
+const BLOCKED_TYPES = new Set(["CLIENT", "TEAM", "OTHER"]);
+const HOLD_REASONS = new Set(["SWITCH_TASK", "BREAK", "WAITING", "OTHER"]);
 
 async function getTask(taskId) {
   return prisma.task.findUnique({
@@ -33,6 +35,10 @@ async function getTask(taskId) {
       ownerId: true,
       milestoneId: true,
       estimatedHours: true,
+      blockedReason: true,
+      blockedType: true,
+      holdReason: true,
+      holdNote: true,
       reworkCount: true,
       totalTimeSpent: true,
       lastStartedAt: true,
@@ -141,7 +147,11 @@ export async function PATCH(request, { params }) {
   }
 
   const body = await request.json();
-  const nextStatus = body?.status;
+  const nextStatus = body?.toStatus ?? body?.status;
+  const blockedReason = body?.blockedReason?.trim?.() || "";
+  const blockedType = body?.blockedType || null;
+  const holdReason = body?.holdReason || null;
+  const holdNote = body?.note?.trim?.() || null;
 
   if (!nextStatus) {
     return buildError("Task status is required.", 400);
@@ -151,20 +161,14 @@ export async function PATCH(request, { params }) {
     return buildSuccess("Task already in status.", { task });
   }
 
-  const allowedTransition = isValidTransition(task.status, nextStatus);
-  if (!allowedTransition) {
-    return buildError(
-      `Invalid transition from ${getStatusLabel(
-        task.status
-      )} to ${getStatusLabel(nextStatus)}.`,
-      400
-    );
-  }
-
-  if (["DONE", "REJECTED"].includes(nextStatus)) {
-    if (!["PM", "CTO"].includes(context.role)) {
-      return buildError("Only PMs and CTOs can approve or reject tasks.", 403);
-    }
+  const transition = canTransition({
+    from: task.status,
+    to: nextStatus,
+    role: context.role,
+    isOwner: task.ownerId === context.user.id,
+  });
+  if (!transition.ok) {
+    return buildError(transition.message, 400);
   }
 
   if (nextStatus === "TESTING") {
@@ -180,9 +184,36 @@ export async function PATCH(request, { params }) {
     }
   }
 
+  if (nextStatus === "BLOCKED") {
+    if (!blockedReason) {
+      return buildError("Blocked reason is required.", 400);
+    }
+    if (!BLOCKED_TYPES.has(blockedType)) {
+      return buildError("Blocked type must be CLIENT, TEAM, or OTHER.", 400);
+    }
+  }
+
+  if (nextStatus === "ON_HOLD" && holdReason && !HOLD_REASONS.has(holdReason)) {
+    return buildError("Hold reason is invalid.", 400);
+  }
+
   const updates = {
     status: nextStatus,
+    blockedReason: null,
+    blockedType: null,
+    holdReason: null,
+    holdNote: null,
   };
+
+  if (nextStatus === "BLOCKED") {
+    updates.blockedReason = blockedReason;
+    updates.blockedType = blockedType;
+  }
+
+  if (nextStatus === "ON_HOLD") {
+    updates.holdReason = holdReason;
+    updates.holdNote = holdNote;
+  }
 
   if (nextStatus === "REJECTED") {
     updates.reworkCount = task.reworkCount + 1;
@@ -224,6 +255,7 @@ export async function PATCH(request, { params }) {
 
   const actorName = context.user?.name || context.user?.email || "A teammate";
   let updated;
+  const updatedTasks = [];
   let offDutyWarning = null;
   try {
     updated = await prisma.$transaction(
@@ -231,6 +263,7 @@ export async function PATCH(request, { params }) {
         const currentTask = await tx.task.findUnique({
           where: { id: taskId },
           select: {
+            id: true,
             timeLogs: true,
             workSessions: {
               where: { endedAt: null, userId: task.ownerId, source: "AUTO" },
@@ -245,6 +278,33 @@ export async function PATCH(request, { params }) {
           data: updates,
         });
 
+        let autoHeldTask = null;
+        if (nextStatus === "IN_PROGRESS") {
+          autoHeldTask = await tx.task.findFirst({
+            where: {
+              ownerId: task.ownerId,
+              status: "IN_PROGRESS",
+              id: { not: taskId },
+            },
+            orderBy: { updatedAt: "desc" },
+            include: {
+              owner: { select: { id: true, name: true, email: true, role: true } },
+              milestone: {
+                select: { id: true, title: true, projectId: true },
+              },
+              checklistItems: true,
+              statusHistory: true,
+              timeLogs: true,
+              breaks: { orderBy: { startedAt: "desc" } },
+              workSessions: {
+                where: { endedAt: null, userId: task.ownerId, source: "AUTO" },
+                orderBy: { startedAt: "desc" },
+                take: 1,
+              },
+            },
+          });
+        }
+
         const activeLog = getActiveTimeLog(currentTask);
 
         if (nextStatus === "IN_PROGRESS" && !activeLog) {
@@ -255,7 +315,7 @@ export async function PATCH(request, { params }) {
               startedAt: now,
             },
           });
-        } else if (nextStatus === "TESTING" && activeLog) {
+        } else if (!shouldTrackWork && activeLog) {
           await tx.taskTimeLog.update({
             where: { id: activeLog.id },
             data: { endedAt: now },
@@ -319,6 +379,72 @@ export async function PATCH(request, { params }) {
           });
         }
 
+        if (autoHeldTask) {
+          await tx.task.update({
+            where: { id: autoHeldTask.id },
+            data: {
+              status: "ON_HOLD",
+              holdReason: "SWITCH_TASK",
+              holdNote: "Auto moved to ON_HOLD because user started another task",
+              blockedReason: null,
+              blockedType: null,
+            },
+          });
+
+          const autoHeldActiveLog = getActiveTimeLog(autoHeldTask);
+          if (autoHeldActiveLog) {
+            await tx.taskTimeLog.update({
+              where: { id: autoHeldActiveLog.id },
+              data: { endedAt: now },
+            });
+          }
+
+          const autoHeldSession = autoHeldTask?.workSessions?.[0] ?? null;
+          if (autoHeldSession) {
+            await endWorkSession({
+              prismaClient: tx,
+              session: autoHeldSession,
+              endedAt: now,
+              includeBreaks: true,
+            });
+          }
+
+          await tx.activityLog.create({
+            data: {
+              userId: task.ownerId,
+              taskId: autoHeldTask.id,
+              description:
+                "Auto moved to ON_HOLD because user started another task",
+            },
+          });
+
+          await tx.taskStatusHistory.create({
+            data: {
+              taskId: autoHeldTask.id,
+              fromStatus: "IN_PROGRESS",
+              toStatus: "ON_HOLD",
+              changedById: context.user.id,
+            },
+          });
+
+          const refreshedOldTask = await tx.task.findUnique({
+            where: { id: autoHeldTask.id },
+            include: {
+              owner: { select: { id: true, name: true, email: true, role: true } },
+              milestone: {
+                select: { id: true, title: true, projectId: true },
+              },
+              checklistItems: true,
+              statusHistory: true,
+              timeLogs: true,
+              breaks: { orderBy: { startedAt: "desc" } },
+            },
+          });
+          if (refreshedOldTask) {
+            updatedTasks.push(refreshedOldTask);
+          }
+        }
+
         await tx.taskStatusHistory.create({
           data: {
             taskId,
@@ -370,8 +496,7 @@ export async function PATCH(request, { params }) {
       "You’re off duty; time will not count until you’re on duty.";
   }
 
-  return buildSuccess("Task updated.", {
-    task: {
+  const computedUpdatedTask = {
       ...updated,
       spentTimeSeconds: computed.effectiveSpentSeconds,
       breakSeconds: computed.breakSeconds,
@@ -386,7 +511,32 @@ export async function PATCH(request, { params }) {
         updated.breaks?.find(
           (brk) => !brk.endedAt && brk.userId === updated.ownerId
         ) ?? null,
-    },
+    };
+
+  const computedOtherTasks = await Promise.all(
+    updatedTasks.map(async (item) => {
+      const computedItem = await computeTaskSpentTime(prisma, item.id, item.ownerId);
+      return {
+        ...item,
+        spentTimeSeconds: computedItem.effectiveSpentSeconds,
+        breakSeconds: computedItem.breakSeconds,
+        dutyOverlapSeconds: computedItem.dutyOverlapSeconds,
+        rawWorkSeconds: computedItem.rawWorkSeconds,
+        lastComputedAt: computedItem.lastComputedAt,
+        presenceStatusNow: computedItem.presenceStatusNow,
+        isOnDutyNow: computedItem.isOnDutyNow,
+        isWFHNow: computedItem.isWFHNow,
+        isOffDutyNow: computedItem.isOffDutyNow,
+        activeBreak:
+          item.breaks?.find((brk) => !brk.endedAt && brk.userId === item.ownerId) ??
+          null,
+      };
+    })
+  );
+
+  return buildSuccess("Task updated.", {
+    task: computedUpdatedTask,
+    updatedTasks: [computedUpdatedTask, ...computedOtherTasks],
     warning: offDutyWarning,
   });
 }
