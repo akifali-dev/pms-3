@@ -5,12 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 const TIME_ZONE = "Asia/Karachi";
 
 const SEGMENT_COLORS = {
-  NO_DUTY: "var(--color-off-duty)",
-  IDLE: "var(--color-idle)",
-  WORK_TASK: "var(--color-work)",
-  WORK_MANUAL: "var(--color-work-manual)",
-  WORK_MANUAL_RUNNING: "var(--color-work-manual)",
-  BREAK: "var(--color-break)",
+  NO_DUTY: "transparent",
+  IDLE: "#ea863d",
+  WORK_TASK: "#41b652",
+  WORK_MANUAL: "#2f71d6",
+  WORK_MANUAL_RUNNING: "#2f71d6",
+  BREAK: "#f5be2a",
 };
 
 const SEGMENT_LABELS = {
@@ -54,6 +54,20 @@ function formatDuration(startAt, endAt) {
     return `${hours}h`;
   }
   return `${remainder}m`;
+}
+
+function formatDurationSeconds(value) {
+  const totalSeconds = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  const totalMinutes = Math.round(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours && minutes) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (hours) {
+    return `${hours}h`;
+  }
+  return `${minutes}m`;
 }
 
 function formatBreakReason(reason) {
@@ -148,9 +162,9 @@ export default function DailyTimelineChart({
     return () => controller.abort();
   }, [date, userId]);
 
-  const payload = state.payload ?? {};
-  const rows = payload?.rows ?? [];
-  const window = payload?.window ?? null;
+  const payload = state.payload;
+  const rows = useMemo(() => payload?.rows ?? [], [payload]);
+  const window = useMemo(() => payload?.window ?? null, [payload]);
 
   const range = useMemo(() => {
     if (!window?.startAt || !window?.endAt) {
@@ -174,27 +188,6 @@ export default function DailyTimelineChart({
         value: tick,
         label: formatTime(tick),
         ...getWidthPercent(range, time, time),
-      };
-    });
-  }, [range, window]);
-
-  const timeBands = useMemo(() => {
-    if (!range) {
-      return [];
-    }
-    const boundaries = [range.start.toISOString(), ...(window?.ticks ?? []), range.end.toISOString()]
-      .map((value) => new Date(value))
-      .filter((value) => !Number.isNaN(value.getTime()))
-      .sort((a, b) => a.getTime() - b.getTime())
-      .map((value) => value.getTime())
-      .filter((value, index, arr) => index === 0 || value !== arr[index - 1]);
-
-    return boundaries.slice(0, -1).map((startValue, index) => {
-      const endValue = boundaries[index + 1];
-      return {
-        key: `${startValue}-${endValue}`,
-        alt: index % 2 === 1,
-        ...getWidthPercent(range, new Date(startValue), new Date(endValue)),
       };
     });
   }, [range, window]);
@@ -256,25 +249,16 @@ export default function DailyTimelineChart({
 
       <div className="mt-4 overflow-x-auto">
         <div className="w-full" style={{ minWidth }}>
-          <div
-            className={`grid items-center gap-3 pb-2 text-[11px] text-[color:var(--color-text-muted)] ${
-              showUserNames ? "grid-cols-[190px,minmax(0,1fr)]" : "grid-cols-1"
-            }`}
-          >
-            {showUserNames ? (
-              <div className="sticky left-0 z-10 flex h-6 items-end bg-[color:var(--color-card)] text-[10px] uppercase tracking-[0.2em]">
-                Developers
-              </div>
-            ) : null}
-            <div className="relative h-6 border-b border-[color:var(--color-border-subtle)]">
+          <div className={`grid items-center gap-3 pb-4 ${showUserNames ? "grid-cols-[220px,minmax(0,1fr)]" : "grid-cols-1"}`}>
+            {showUserNames ? <div /> : null}
+            <div className="relative h-7 text-[11px] text-[#86a0c0]">
               {ticks.map((tick) => (
                 <div
                   key={tick.value}
                   className="absolute top-0 h-full"
                   style={{ left: `${tick.left}%` }}
                 >
-                  <div className="h-full border-l border-dashed border-[color:var(--color-border-subtle)]" />
-                  <span className="absolute -bottom-5 -translate-x-1/2 whitespace-nowrap">
+                  <span className="absolute left-0 top-0 -translate-x-1/2 whitespace-nowrap">
                     {tick.label}
                   </span>
                 </div>
@@ -282,105 +266,60 @@ export default function DailyTimelineChart({
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-muted)]">
-            {rowMarkers.map((row, index) => (
+          <div className="space-y-6">
+            {rowMarkers.map((row) => (
               <div
                 key={row.user?.id ?? row.user?.name ?? "row"}
-                className={`grid items-center gap-3 px-2 py-2 ${
-                  showUserNames ? "grid-cols-[190px,minmax(0,1fr)]" : "grid-cols-1"
-                } ${index > 0 ? "border-t border-[color:var(--color-border-subtle)]" : ""}`}
-                style={{
-                  backgroundColor:
-                    index % 2 === 1
-                      ? "color-mix(in srgb, var(--color-muted-bg) 60%, transparent)"
-                      : "transparent",
-                }}
+                className={`grid items-center gap-3 ${
+                  showUserNames ? "grid-cols-[220px,minmax(0,1fr)]" : "grid-cols-1"
+                }`}
               >
                 {showUserNames ? (
-                  <div className="sticky left-0 z-10 flex h-10 items-center truncate bg-transparent pr-2 text-sm font-semibold text-[color:var(--color-text)]">
-                    {row.user?.name ?? "Unknown"}
+                  <div className="flex items-center gap-3 pr-2">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#253242] text-base text-white/90">
+                      {(row.user?.name ?? "U").trim().charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-medium text-white">{row.user?.name ?? "Unknown"}</p>
+                      <p className="text-sm text-[#7c9fc4]">Developer</p>
+                    </div>
                   </div>
                 ) : null}
-                <div className="relative h-10 overflow-hidden rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-card)]">
-                  {timeBands.map((band) =>
-                    band.alt ? (
-                      <div
-                        key={band.key}
-                        className="absolute inset-y-0"
-                        style={{
-                          left: `${band.left}%`,
-                          width: `${band.width}%`,
-                          backgroundColor:
-                            "color-mix(in srgb, var(--color-muted-bg) 70%, transparent)",
-                        }}
-                      />
-                    ) : null
-                  )}
-                  {ticks.map((tick) => (
-                    <div
-                      key={`line-${tick.value}`}
-                      className="absolute inset-y-0 border-l border-dashed border-[color:var(--color-border-subtle)]"
-                      style={{ left: `${tick.left}%` }}
-                    />
-                  ))}
-                  {row.segments.map((segment) => (
-                    <div
-                      key={`${segment.type}-${segment.startAt}-${segment.endAt}`}
-                      className="absolute top-1/2 h-6 -translate-y-1/2"
-                      style={{
-                        left: `${segment.left}%`,
-                        width: `${segment.width}%`,
-                        backgroundColor:
-                          SEGMENT_COLORS[segment.type] ?? SEGMENT_COLORS.NO_DUTY,
-                        backgroundImage: segment.isWFH
-                          ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0 4px, rgba(255,255,255,0) 4px 8px)"
-                          : "none",
-                      }}
-                      title={buildTooltip(segment)}
-                    />
-                  ))}
+                <div>
+                  <div className="relative h-12 overflow-hidden rounded-xl bg-[#050b17]">
+                    {row.segments
+                      .filter((segment) => segment.type !== "NO_DUTY")
+                      .map((segment) => (
+                        <div
+                          key={`${segment.type}-${segment.startAt}-${segment.endAt}`}
+                          className="absolute inset-y-0"
+                          style={{
+                            left: `${segment.left}%`,
+                            width: `${segment.width}%`,
+                            backgroundColor:
+                              SEGMENT_COLORS[segment.type] ?? SEGMENT_COLORS.NO_DUTY,
+                            backgroundImage: segment.isWFH
+                              ? "repeating-linear-gradient(45deg, rgba(255,255,255,0.25) 0 4px, rgba(255,255,255,0) 4px 8px)"
+                              : "none",
+                          }}
+                          title={buildTooltip(segment)}
+                        />
+                      ))}
+                  </div>
+                  <p className="mt-2 text-sm text-[#8ea8c8]">
+                    {formatDurationSeconds(row.totals?.dutySeconds)} total
+                    <span className="px-2">•</span>
+                    {formatDurationSeconds(row.totals?.workTaskSeconds)} task
+                    <span className="px-2">•</span>
+                    {formatDurationSeconds(row.totals?.workManualSeconds)} manual
+                    <span className="px-2">•</span>
+                    {formatDurationSeconds(row.totals?.idleSeconds)} idle
+                  </p>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-[color:var(--color-text-muted)]">
-        <span className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-none" style={{ background: SEGMENT_COLORS.WORK_TASK }} />
-          Task work
-        </span>
-        <span className="flex items-center gap-2">
-          <span
-            className="h-2 w-2 rounded-none"
-            style={{ background: SEGMENT_COLORS.WORK_MANUAL }}
-          />
-          Manual work
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-none" style={{ background: SEGMENT_COLORS.BREAK }} />
-          Break
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-none" style={{ background: SEGMENT_COLORS.IDLE }} />
-          Idle
-        </span>
-        <span className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-none" style={{ background: SEGMENT_COLORS.NO_DUTY }} />
-          No duty
-        </span>
-        <span className="flex items-center gap-2">
-          <span
-            className="h-2 w-3 rounded-none"
-            style={{
-              backgroundColor: SEGMENT_COLORS.WORK_TASK,
-              backgroundImage:
-                "repeating-linear-gradient(45deg, rgba(255,255,255,0.35) 0 4px, rgba(255,255,255,0) 4px 8px)",
-            }}
-          />
-          WFH overlay
-        </span>
       </div>
     </div>
   );
