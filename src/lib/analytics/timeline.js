@@ -2,7 +2,7 @@ import { getShiftWindow, mergeIntervals } from "@/lib/dutyHours";
 import { normalizeAutoOffForAttendances, resolveAttendanceOutTime } from "@/lib/attendanceAutoOff";
 import { formatBreakTypes, normalizeBreakTypes } from "@/lib/breakTypes";
 
-const WORKING_STATUSES = new Set(["IN_PROGRESS", "DEV_TEST"]);
+const WORKING_STATUSES = new Set(["IN_PROGRESS"]);
 
 function normalizeDate(value) {
   if (!value) {

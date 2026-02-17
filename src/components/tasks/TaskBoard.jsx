@@ -10,6 +10,9 @@ import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
 import { canMarkTaskDone, roles } from "@/lib/roles";
 import { BREAK_TYPES, formatBreakTypes } from "@/lib/breakTypes";
 
+const MIN_COLUMN_WIDTH = 220;
+const MAX_COLUMN_WIDTH = 520;
+
 const formatDurationShort = (totalSeconds = 0) => {
   const seconds = Math.max(0, Number(totalSeconds) || 0);
   const hours = Math.floor(seconds / 3600);
@@ -131,10 +134,65 @@ export default function TaskBoard({
   });
   const [breakPanelOpen, setBreakPanelOpen] = useState(false);
   const [breakSubmitting, setBreakSubmitting] = useState(false);
+  const [columnPrefs, setColumnPrefs] = useState({});
+  const [resizeState, setResizeState] = useState(null);
 
   useEffect(() => {
     setTaskItems(tasks);
   }, [tasks]);
+
+  const milestoneId = tasks?.[0]?.milestoneId ?? "unknown";
+  const prefKey = `kanbanColumnPrefs:${currentUserId ?? "guest"}:${milestoneId}`;
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const raw = window.localStorage.getItem(prefKey);
+    if (!raw) {
+      setColumnPrefs({});
+      return;
+    }
+    try {
+      setColumnPrefs(JSON.parse(raw));
+    } catch {
+      setColumnPrefs({});
+    }
+  }, [prefKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(prefKey, JSON.stringify(columnPrefs));
+  }, [prefKey, columnPrefs]);
+
+  useEffect(() => {
+    if (!resizeState) {
+      return;
+    }
+    const onMove = (event) => {
+      const delta = event.clientX - resizeState.startX;
+      const width = Math.min(
+        MAX_COLUMN_WIDTH,
+        Math.max(MIN_COLUMN_WIDTH, resizeState.startWidth + delta)
+      );
+      setColumnPrefs((prev) => ({
+        ...prev,
+        [resizeState.statusId]: {
+          width,
+          collapsed: Boolean(prev?.[resizeState.statusId]?.collapsed),
+        },
+      }));
+    };
+    const onUp = () => setResizeState(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [resizeState]);
 
   useEffect(() => {
     const taskId = searchParams?.get("taskId");
@@ -283,11 +341,42 @@ export default function TaskBoard({
       return;
     }
 
+    const payload = { toStatus: nextStatus };
+    if (nextStatus === "BLOCKED") {
+      const typeInput = window
+        .prompt("Blocked type (CLIENT | TEAM | OTHER)", "CLIENT")
+        ?.toUpperCase();
+      const reasonInput = window.prompt("Blocked reason", "")?.trim();
+      if (!typeInput || !reasonInput) {
+        addToast({
+          title: "Blocked reason required",
+          message: "Please provide blocked type and reason.",
+          variant: "error",
+        });
+        return;
+      }
+      payload.blockedType = typeInput;
+      payload.blockedReason = reasonInput;
+    }
+
+    if (nextStatus === "ON_HOLD") {
+      const holdReasonInput = window
+        .prompt("Hold reason (SWITCH_TASK | BREAK | WAITING | OTHER) optional", "")
+        ?.toUpperCase();
+      const holdNoteInput = window.prompt("Optional hold note", "")?.trim();
+      if (holdReasonInput) {
+        payload.holdReason = holdReasonInput;
+      }
+      if (holdNoteInput) {
+        payload.note = holdNoteInput;
+      }
+    }
+
     setPendingTaskId(task.id);
     const response = await fetch(`/api/tasks/${task.id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
+      body: JSON.stringify(payload),
     });
 
     const responseText = await response.text();
@@ -320,9 +409,19 @@ export default function TaskBoard({
       return;
     }
 
-    setTaskItems((prev) =>
-      prev.map((item) => (item.id === task.id ? data.task : item))
-    );
+    if (Array.isArray(data?.updatedTasks) && data.updatedTasks.length > 0) {
+      setTaskItems((prev) => {
+        const map = new Map(prev.map((item) => [item.id, item]));
+        data.updatedTasks.forEach((updatedTask) => {
+          map.set(updatedTask.id, updatedTask);
+        });
+        return Array.from(map.values());
+      });
+    } else {
+      setTaskItems((prev) =>
+        prev.map((item) => (item.id === task.id ? data.task : item))
+      );
+    }
 
     if (data?.warning) {
       addToast({
@@ -334,7 +433,10 @@ export default function TaskBoard({
 
     addToast({
       title: "Task moved",
-      message: `Moved to ${getStatusLabel(nextStatus)}.`,
+      message:
+        nextStatus === "IN_PROGRESS" && (data?.updatedTasks?.length ?? 0) > 1
+          ? "Started task. Previous task moved to On Hold."
+          : `Moved to ${getStatusLabel(nextStatus)}.`,
       variant: "success",
     });
     setPendingTaskId(null);
@@ -669,6 +771,33 @@ export default function TaskBoard({
     handleStatusChange(task, statusId);
   };
 
+  const toggleColumnCollapse = (statusId) => {
+    setColumnPrefs((prev) => ({
+      ...prev,
+      [statusId]: {
+        width: prev?.[statusId]?.width ?? 280,
+        collapsed: !prev?.[statusId]?.collapsed,
+      },
+    }));
+  };
+
+  const resizeColumn = (statusId, delta) => {
+    setColumnPrefs((prev) => {
+      const currentWidth = Number(prev?.[statusId]?.width ?? 280);
+      const nextWidth = Math.min(
+        MAX_COLUMN_WIDTH,
+        Math.max(MIN_COLUMN_WIDTH, currentWidth + delta)
+      );
+      return {
+        ...prev,
+        [statusId]: {
+          width: nextWidth,
+          collapsed: Boolean(prev?.[statusId]?.collapsed),
+        },
+      };
+    });
+  };
+
   const renderActions = (task) => {
     const isPending = pendingTaskId === task.id;
     const buttonClass = isPending ? "pointer-events-none opacity-60" : "";
@@ -816,9 +945,15 @@ export default function TaskBoard({
 
       <div className="flex gap-4 overflow-x-auto pb-2">
         {TASK_STATUSES.map((status) => (
+          (() => {
+            const pref = columnPrefs?.[status.id] ?? {};
+            const isCollapsed = Boolean(pref.collapsed);
+            const width = Number(pref.width ?? 280);
+            return (
           <div
             key={status.id}
-            className={`min-w-[240px] flex-1 space-y-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 transition ${
+            style={{ width: isCollapsed ? 72 : width, minWidth: isCollapsed ? 72 : width }}
+            className={`relative space-y-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 transition ${
               dragOverStatus === status.id
                 ? "border-[color:var(--color-accent)] bg-[color:var(--color-card)]"
                 : ""
@@ -830,15 +965,42 @@ export default function TaskBoard({
             onDragLeave={() => setDragOverStatus(null)}
             onDrop={(event) => handleDrop(event, status.id)}
           >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-[color:var(--color-text)]">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className={`text-sm font-semibold text-[color:var(--color-text)] ${isCollapsed ? "[writing-mode:vertical-rl] rotate-180" : ""}`}>
                 {status.label}
               </h3>
-              <span className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)]">
-                {groupedTasks[status.id]?.length ?? 0}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)]">
+                  {groupedTasks[status.id]?.length ?? 0}
+                </span>
+                <button
+                  type="button"
+                  className="rounded border border-[color:var(--color-border)] px-1 text-xs"
+                  onClick={() => toggleColumnCollapse(status.id)}
+                >
+                  {isCollapsed ? "+" : "−"}
+                </button>
+                {!isCollapsed && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="rounded border border-[color:var(--color-border)] px-1 text-xs"
+                      onClick={() => resizeColumn(status.id, -20)}
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-[color:var(--color-border)] px-1 text-xs"
+                      onClick={() => resizeColumn(status.id, 20)}
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="space-y-3">
+            {!isCollapsed && <div className="space-y-3">
               {(groupedTasks[status.id] ?? []).map((task) => {
                 const completedChecklistCount =
                   task.checklistItems?.filter((item) => item.isCompleted)
@@ -874,6 +1036,14 @@ export default function TaskBoard({
                     <p className="text-sm font-semibold text-[color:var(--color-text)]">
                       {task.title}
                     </p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {task.status === "BLOCKED" && (
+                        <span className="rounded border border-rose-500/40 px-1.5 py-0.5 text-[10px] text-rose-300">🔒 {task.blockedType}: {task.blockedReason}</span>
+                      )}
+                      {task.status === "ON_HOLD" && task.holdReason && (
+                        <span className="rounded border border-amber-500/40 px-1.5 py-0.5 text-[10px] text-amber-300">⏸ {task.holdReason}</span>
+                      )}
+                    </div>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--color-muted-bg)] text-xs font-semibold text-[color:var(--color-text)]">
@@ -916,8 +1086,25 @@ export default function TaskBoard({
                   No tasks here.
                 </p>
               )}
-            </div>
+            </div>}
+            {!isCollapsed && (
+              <div
+                role="separator"
+                aria-label={`Resize ${status.label} column`}
+                className="absolute right-0 top-0 h-full w-2 cursor-col-resize"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setResizeState({
+                    statusId: status.id,
+                    startX: event.clientX,
+                    startWidth: width,
+                  });
+                }}
+              />
+            )}
           </div>
+            );
+          })()
         ))}
       </div>
 
@@ -1116,15 +1303,13 @@ export default function TaskBoard({
                       />
                     ) : null}
                     {(() => {
-                      const isAllowedStatus = ["IN_PROGRESS", "DEV_TEST"].includes(
-                        selectedTask.status
-                      );
+                      const isAllowedStatus = ["IN_PROGRESS"].includes(selectedTask.status);
                       const canControl = canControlBreaks(selectedTask);
                       const isDisabled = !(isAllowedStatus && canControl);
                       const tooltip = !canControl
                         ? "Only the assigned developer can pause or resume time."
                         : !isAllowedStatus
-                          ? "Breaks are only available when a task is in progress or in dev test."
+                          ? "Breaks are only available when a task is in progress."
                           : undefined;
                       return (
                       <ActionButton
