@@ -10,9 +10,16 @@ import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
 import { canMarkTaskDone, roles } from "@/lib/roles";
 import { BREAK_TYPES, formatBreakTypes } from "@/lib/breakTypes";
 
-const COLLAPSED_COLUMN_WIDTH = 64;
-const DEFAULT_COLUMN_WIDTH = 320;
-const MAX_COLUMN_WIDTH = 560;
+const COLLAPSED_WIDTH = 64;
+const DEFAULT_EXPANDED_WIDTH = 320;
+const MIN_EXPANDED_WIDTH = 220;
+const MAX_EXPANDED_WIDTH = 600;
+
+const clampExpandedWidth = (value) =>
+  Math.min(
+    MAX_EXPANDED_WIDTH,
+    Math.max(MIN_EXPANDED_WIDTH, Number(value ?? DEFAULT_EXPANDED_WIDTH))
+  );
 
 const formatDurationShort = (totalSeconds = 0) => {
   const seconds = Math.max(0, Number(totalSeconds) || 0);
@@ -187,10 +194,7 @@ export default function TaskBoard({
     // Pointer events keep resizing smooth/live across mouse, touch, and pen.
     const onMove = (event) => {
       const delta = event.clientX - resizeState.startX;
-      const width = Math.min(
-        MAX_COLUMN_WIDTH,
-        Math.max(COLLAPSED_COLUMN_WIDTH, resizeState.startWidth + delta)
-      );
+      const width = clampExpandedWidth(resizeState.startWidth + delta);
       setColumnPrefs((prev) => ({
         ...prev,
         [resizeState.statusId]: {
@@ -204,12 +208,8 @@ export default function TaskBoard({
     const onUp = () => {
       setColumnPrefs((prev) => {
         const current = prev?.[resizeState.statusId] ?? {};
-        const committedWidth = Math.min(
-          MAX_COLUMN_WIDTH,
-          Math.max(
-            COLLAPSED_COLUMN_WIDTH,
-            Number(current.width ?? resizeState.startWidth ?? DEFAULT_COLUMN_WIDTH)
-          )
+        const committedWidth = clampExpandedWidth(
+          current.width ?? resizeState.startWidth ?? DEFAULT_EXPANDED_WIDTH
         );
 
         return {
@@ -260,12 +260,8 @@ export default function TaskBoard({
         const count = taskCountsByStatus[status.id] ?? 0;
         const existing = prev?.[status.id] ?? {};
         const userTouched = Boolean(existing.userTouched);
-        const safeExpandedWidth = Math.min(
-          MAX_COLUMN_WIDTH,
-          Math.max(
-            COLLAPSED_COLUMN_WIDTH,
-            Number(existing.expandedWidth ?? existing.width ?? DEFAULT_COLUMN_WIDTH)
-          )
+        const safeExpandedWidth = clampExpandedWidth(
+          existing.expandedWidth ?? existing.width ?? DEFAULT_EXPANDED_WIDTH
         );
 
         const shouldDefaultCollapse = !hasSavedPrefs && count === 0;
@@ -273,7 +269,7 @@ export default function TaskBoard({
           typeof existing.collapsed === "boolean"
             ? existing.collapsed
             : shouldDefaultCollapse;
-        const width = collapsed ? COLLAPSED_COLUMN_WIDTH : safeExpandedWidth;
+        const width = collapsed ? COLLAPSED_WIDTH : safeExpandedWidth;
 
         if (
           existing.collapsed !== collapsed ||
@@ -543,12 +539,8 @@ export default function TaskBoard({
 
     setColumnPrefs((prev) => {
       const current = prev?.[nextStatus] ?? {};
-      const expandedWidth = Math.min(
-        MAX_COLUMN_WIDTH,
-        Math.max(
-          COLLAPSED_COLUMN_WIDTH,
-          Number(current.expandedWidth ?? current.width ?? DEFAULT_COLUMN_WIDTH)
-        )
+      const expandedWidth = clampExpandedWidth(
+        current.expandedWidth ?? current.width ?? DEFAULT_EXPANDED_WIDTH
       );
 
       return {
@@ -897,12 +889,8 @@ export default function TaskBoard({
   const expandColumn = (statusId) => {
     setColumnPrefs((prev) => {
       const current = prev?.[statusId] ?? {};
-      const expandedWidth = Math.min(
-        MAX_COLUMN_WIDTH,
-        Math.max(
-          COLLAPSED_COLUMN_WIDTH,
-          Number(current.expandedWidth ?? current.width ?? DEFAULT_COLUMN_WIDTH)
-        )
+      const expandedWidth = clampExpandedWidth(
+        current.expandedWidth ?? current.width ?? DEFAULT_EXPANDED_WIDTH
       );
 
       return {
@@ -921,12 +909,8 @@ export default function TaskBoard({
   const collapseColumn = (statusId) => {
     setColumnPrefs((prev) => {
       const current = prev?.[statusId] ?? {};
-      const expandedWidth = Math.min(
-        MAX_COLUMN_WIDTH,
-        Math.max(
-          COLLAPSED_COLUMN_WIDTH,
-          Number(current.width ?? current.expandedWidth ?? DEFAULT_COLUMN_WIDTH)
-        )
+      const expandedWidth = clampExpandedWidth(
+        current.width ?? current.expandedWidth ?? DEFAULT_EXPANDED_WIDTH
       );
 
       return {
@@ -934,7 +918,7 @@ export default function TaskBoard({
         [statusId]: {
           ...current,
           collapsed: true,
-          width: COLLAPSED_COLUMN_WIDTH,
+          width: COLLAPSED_WIDTH,
           expandedWidth,
           userTouched: true,
         },
@@ -1093,14 +1077,10 @@ export default function TaskBoard({
           const isCollapsed = Boolean(pref.collapsed);
           const isResizing = resizeState?.statusId === status.id;
           const taskCount = groupedTasks[status.id]?.length ?? 0;
-          const expandedWidth = Math.min(
-            MAX_COLUMN_WIDTH,
-            Math.max(
-              COLLAPSED_COLUMN_WIDTH,
-              Number(pref.expandedWidth ?? pref.width ?? DEFAULT_COLUMN_WIDTH)
-            )
+          const expandedWidth = clampExpandedWidth(
+            pref.expandedWidth ?? pref.width ?? DEFAULT_EXPANDED_WIDTH
           );
-          const width = isCollapsed ? COLLAPSED_COLUMN_WIDTH : expandedWidth;
+          const width = isCollapsed ? COLLAPSED_WIDTH : expandedWidth;
 
           return (
           <div
@@ -1110,9 +1090,7 @@ export default function TaskBoard({
               minWidth: width,
               maxWidth: width,
               willChange: "width",
-              transition: isResizing
-                ? "none"
-                : "width 180ms ease, min-width 180ms ease, max-width 180ms ease",
+              transition: isResizing ? "none" : "width 180ms ease",
             }}
             className={`relative flex-none rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 ${
               dragOverStatus === status.id
@@ -1126,17 +1104,21 @@ export default function TaskBoard({
             onDragLeave={() => setDragOverStatus(null)}
             onDrop={(event) => handleDrop(event, status.id)}
           >
-            <div className="mb-3 flex h-8 items-center justify-between gap-2 overflow-hidden">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <h3 className={`truncate font-semibold text-[color:var(--color-text)] ${isCollapsed ? "text-xs" : "text-sm"}`}>
-                  {status.label}
-                </h3>
-                <span className="inline-flex h-5 min-w-5 max-w-10 items-center justify-center overflow-hidden rounded-full border border-[color:var(--color-border)] px-1.5 text-[11px] leading-none text-[color:var(--color-text-muted)]">
-                  {taskCount}
-                </span>
-              </div>
-              <div className="shrink-0">
-                {isCollapsed ? (
+            <div
+              className={`mb-3 overflow-hidden ${
+                isCollapsed
+                  ? "flex min-h-[140px] flex-col items-center justify-start gap-2"
+                  : "flex h-8 items-center justify-between gap-2"
+              }`}
+            >
+              {isCollapsed ? (
+                <>
+                  <span className="inline-flex h-5 min-w-5 max-w-10 items-center justify-center overflow-hidden rounded-full border border-[color:var(--color-border)] px-1.5 text-[11px] leading-none text-[color:var(--color-text-muted)]">
+                    {taskCount}
+                  </span>
+                  <h3 className="max-h-[86px] overflow-hidden text-xs font-semibold text-[color:var(--color-text)] [writing-mode:vertical-rl] [transform:rotate(180deg)]">
+                    {status.label}
+                  </h3>
                   <button
                     type="button"
                     className="inline-flex h-6 w-6 items-center justify-center rounded border border-[color:var(--color-border)] text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-muted)]"
@@ -1146,7 +1128,17 @@ export default function TaskBoard({
                   >
                     +
                   </button>
-                ) : (
+                </>
+              ) : (
+                <>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <h3 className="truncate text-sm font-semibold text-[color:var(--color-text)]">
+                      {status.label}
+                    </h3>
+                    <span className="inline-flex h-5 min-w-5 max-w-10 items-center justify-center overflow-hidden rounded-full border border-[color:var(--color-border)] px-1.5 text-[11px] leading-none text-[color:var(--color-text-muted)]">
+                      {taskCount}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     className="inline-flex h-6 w-6 items-center justify-center rounded border border-[color:var(--color-border)] text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-muted)]"
@@ -1156,10 +1148,10 @@ export default function TaskBoard({
                   >
                     -
                   </button>
-                )}
-              </div>
+                </>
+              )}
             </div>
-            {!isCollapsed && <div className="space-y-3">
+            {!isCollapsed && <div className="min-w-0 space-y-3 overflow-hidden">
               {(groupedTasks[status.id] ?? []).map((task) => {
                 const completedChecklistCount =
                   task.checklistItems?.filter((item) => item.isCompleted)
@@ -1184,7 +1176,7 @@ export default function TaskBoard({
                 return (
                   <div
                     key={task.id}
-                    className={`cursor-pointer rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-3 transition hover:border-[color:var(--color-accent)] ${
+                    className={`min-w-0 cursor-pointer overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-2.5 transition hover:border-[color:var(--color-accent)] sm:p-3 ${
                       pendingTaskId === task.id ? "opacity-60" : ""
                     } ${draggingTaskId === task.id ? "opacity-70" : ""}`}
                     draggable={Boolean(currentUserId)}
@@ -1192,7 +1184,7 @@ export default function TaskBoard({
                     onDragEnd={handleDragEnd}
                     onClick={() => setSelectedTaskId(task.id)}
                   >
-                    <p className="text-sm font-semibold text-[color:var(--color-text)]">
+                    <p className="truncate text-sm font-semibold text-[color:var(--color-text)]">
                       {task.title}
                     </p>
                     <div className="mt-1 flex flex-wrap gap-1">
@@ -1203,12 +1195,12 @@ export default function TaskBoard({
                         <span className="rounded border border-amber-500/40 px-1.5 py-0.5 text-[10px] text-amber-300">⏸ {task.holdReason}</span>
                       )}
                     </div>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
+                    <div className="mt-3 flex min-w-0 items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3 overflow-hidden">
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--color-muted-bg)] text-xs font-semibold text-[color:var(--color-text)]">
                           {(task.owner?.name ?? "U").charAt(0).toUpperCase()}
                         </span>
-                        <div className="flex items-center gap-1 text-xs text-[color:var(--color-text-subtle)]">
+                        <div className="flex min-w-0 items-center gap-1 overflow-hidden text-xs text-[color:var(--color-text-subtle)]">
                           <svg
                             viewBox="0 0 24 24"
                             className="h-3.5 w-3.5"
@@ -1246,31 +1238,32 @@ export default function TaskBoard({
                 </p>
               )}
             </div>}
-            <div
-              role="separator"
-              aria-label={`Resize ${status.label} column`}
-              className={`group absolute right-0 top-0 h-full w-2 cursor-col-resize rounded-r-2xl transition ${
-                isResizing
-                  ? "bg-[color:var(--color-accent-muted)]"
-                  : "hover:bg-[color:var(--color-accent-muted)]"
-              }`}
-              onPointerDown={(event) => {
-                event.preventDefault();
-                // Capture drag start so we can apply live width updates during pointer moves.
-                setResizeState({
-                  statusId: status.id,
-                  startX: event.clientX,
-                  startWidth: width,
-                });
-              }}
-            >
-              <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-[color:var(--color-border)] transition group-hover:bg-[color:var(--color-accent)]" />
-              <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-1 opacity-0 transition group-hover:opacity-80">
-                <span className="h-1 w-1 rounded-full bg-[color:var(--color-text-subtle)]" />
-                <span className="h-1 w-1 rounded-full bg-[color:var(--color-text-subtle)]" />
-                <span className="h-1 w-1 rounded-full bg-[color:var(--color-text-subtle)]" />
+            {!isCollapsed && (
+              <div
+                role="separator"
+                aria-label={`Resize ${status.label} column`}
+                className={`group absolute right-0 top-0 h-full w-2 cursor-col-resize rounded-r-2xl transition ${
+                  isResizing
+                    ? "bg-[color:var(--color-accent-muted)]"
+                    : "hover:bg-[color:var(--color-accent-muted)]"
+                }`}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  setResizeState({
+                    statusId: status.id,
+                    startX: event.clientX,
+                    startWidth: expandedWidth,
+                  });
+                }}
+              >
+                <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-[color:var(--color-border)] transition group-hover:bg-[color:var(--color-accent)]" />
+                <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-1 opacity-0 transition group-hover:opacity-80">
+                  <span className="h-1 w-1 rounded-full bg-[color:var(--color-text-subtle)]" />
+                  <span className="h-1 w-1 rounded-full bg-[color:var(--color-text-subtle)]" />
+                  <span className="h-1 w-1 rounded-full bg-[color:var(--color-text-subtle)]" />
+                </div>
               </div>
-            </div>
+            )}
           </div>
           );
         })}
