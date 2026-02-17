@@ -1,14 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import TimelineCard from "@/components/analytics/TimelineCard";
 import WorkstackChart from "@/components/analytics/WorkstackChart";
 
@@ -123,26 +115,6 @@ function UserTotals({ totals }) {
   );
 }
 
-function DailyUsersTooltip({ active, payload }) {
-  if (!active || !payload?.length) {
-    return null;
-  }
-  const entry = payload[0]?.payload;
-  return (
-    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-3 text-xs text-[color:var(--color-text)] shadow-lg">
-      <p className="text-xs font-semibold text-[color:var(--color-text)]">
-        {entry?.name ?? "User"}
-      </p>
-      <div className="mt-2 space-y-1 text-[color:var(--color-text-muted)]">
-        <p>Work: {formatDuration(entry.workSeconds)}</p>
-        <p>Break: {formatDuration(entry.breakSeconds)}</p>
-        <p>Idle: {formatDuration(entry.idleSeconds)}</p>
-        <p>Utilization: {formatPercent(entry.utilization)}</p>
-      </div>
-    </div>
-  );
-}
-
 function UsersSummaryTable({ users }) {
   if (!users?.length) {
     return (
@@ -181,77 +153,6 @@ function UsersSummaryTable({ users }) {
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function DailyUsersStackedChart({ users }) {
-  const data = useMemo(() => {
-    return [...(users ?? [])]
-      .map((entry) => {
-        const totals = normalizeTotals(entry?.totals ?? EMPTY_TOTALS);
-        return {
-          id: entry.user.id,
-          name: entry.user.name,
-          dutySeconds: totals.dutySeconds,
-          workSeconds: totals.workSeconds,
-          breakSeconds: totals.breakSeconds,
-          idleSeconds: totals.idleSeconds,
-          utilization: totals.utilization,
-        };
-      })
-      .sort((a, b) => b.dutySeconds - a.dutySeconds);
-  }, [users]);
-
-  const height = Math.max(220, data.length * 44);
-
-  if (!data.length) {
-    return (
-      <div className="rounded-xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-muted-bg)] p-4 text-xs text-[color:var(--color-text-subtle)]">
-        No daily activity yet.
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full min-h-[220px] w-full" style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ top: 10, right: 20, left: 40 }}>
-          <XAxis
-            type="number"
-            tickFormatter={(value) => formatDuration(value)}
-            tick={{ fill: "var(--color-text-muted)", fontSize: 12 }}
-          />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={120}
-            tick={{ fill: "var(--color-text-muted)", fontSize: 12 }}
-          />
-          <Tooltip content={<DailyUsersTooltip />} />
-          <Bar
-            dataKey="workSeconds"
-            stackId="user"
-            fill="var(--color-work)"
-            name="Work"
-            radius={0}
-          />
-          <Bar
-            dataKey="breakSeconds"
-            stackId="user"
-            fill="var(--color-break)"
-            name="Break"
-            radius={0}
-          />
-          <Bar
-            dataKey="idleSeconds"
-            stackId="user"
-            fill="var(--color-idle)"
-            name="Idle"
-            radius={0}
-          />
-        </BarChart>
-      </ResponsiveContainer>
     </div>
   );
 }
@@ -342,28 +243,20 @@ export default function AnalyticsResults({ period, date, userId }) {
               <UserTotals totals={teamTotals} />
             </div>
           </div>
-          <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
-            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
-              <p className="text-sm font-semibold text-[color:var(--color-text)]">
-                Daily work mix
-              </p>
-              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                Work, break, and idle time per user.
-              </p>
-              <div className="mt-4">
-                <DailyUsersStackedChart users={results} />
-              </div>
-            </div>
-            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5">
+            <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-[color:var(--color-text)]">
                 User totals
               </p>
-              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              <span className="text-xs uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
+                Daily
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                 Work, break, idle, and utilization.
-              </p>
-              <div className="mt-4">
-                <UsersSummaryTable users={results} />
-              </div>
+            </p>
+            <div className="mt-4">
+              <UsersSummaryTable users={results} />
             </div>
           </div>
         </div>

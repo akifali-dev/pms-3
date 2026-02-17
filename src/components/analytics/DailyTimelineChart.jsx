@@ -178,6 +178,27 @@ export default function DailyTimelineChart({
     });
   }, [range, window]);
 
+  const timeBands = useMemo(() => {
+    if (!range) {
+      return [];
+    }
+    const boundaries = [range.start.toISOString(), ...(window?.ticks ?? []), range.end.toISOString()]
+      .map((value) => new Date(value))
+      .filter((value) => !Number.isNaN(value.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime())
+      .map((value) => value.getTime())
+      .filter((value, index, arr) => index === 0 || value !== arr[index - 1]);
+
+    return boundaries.slice(0, -1).map((startValue, index) => {
+      const endValue = boundaries[index + 1];
+      return {
+        key: `${startValue}-${endValue}`,
+        alt: index % 2 === 1,
+        ...getWidthPercent(range, new Date(startValue), new Date(endValue)),
+      };
+    });
+  }, [range, window]);
+
   const rowMarkers = useMemo(() => {
     if (!range) {
       return [];
@@ -237,12 +258,12 @@ export default function DailyTimelineChart({
         <div className="w-full" style={{ minWidth }}>
           <div
             className={`grid items-center gap-3 pb-2 text-[11px] text-[color:var(--color-text-muted)] ${
-              showUserNames ? "grid-cols-[180px,minmax(0,1fr)]" : "grid-cols-1"
+              showUserNames ? "grid-cols-[190px,minmax(0,1fr)]" : "grid-cols-1"
             }`}
           >
             {showUserNames ? (
               <div className="sticky left-0 z-10 flex h-6 items-end bg-[color:var(--color-card)] text-[10px] uppercase tracking-[0.2em]">
-                Users
+                Developers
               </div>
             ) : null}
             <div className="relative h-6 border-b border-[color:var(--color-border-subtle)]">
@@ -253,7 +274,7 @@ export default function DailyTimelineChart({
                   style={{ left: `${tick.left}%` }}
                 >
                   <div className="h-full border-l border-dashed border-[color:var(--color-border-subtle)]" />
-                  <span className="absolute -bottom-5 -translate-x-1/2">
+                  <span className="absolute -bottom-5 -translate-x-1/2 whitespace-nowrap">
                     {tick.label}
                   </span>
                 </div>
@@ -261,24 +282,51 @@ export default function DailyTimelineChart({
             </div>
           </div>
 
-          <div className="space-y-3">
-            {rowMarkers.map((row) => (
+          <div className="overflow-hidden rounded-xl border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-muted)]">
+            {rowMarkers.map((row, index) => (
               <div
                 key={row.user?.id ?? row.user?.name ?? "row"}
-                className={`grid items-center gap-3 ${
-                  showUserNames ? "grid-cols-[180px,minmax(0,1fr)]" : "grid-cols-1"
-                }`}
+                className={`grid items-center gap-3 px-2 py-2 ${
+                  showUserNames ? "grid-cols-[190px,minmax(0,1fr)]" : "grid-cols-1"
+                } ${index > 0 ? "border-t border-[color:var(--color-border-subtle)]" : ""}`}
+                style={{
+                  backgroundColor:
+                    index % 2 === 1
+                      ? "color-mix(in srgb, var(--color-muted-bg) 60%, transparent)"
+                      : "transparent",
+                }}
               >
                 {showUserNames ? (
-                  <div className="sticky left-0 z-10 flex h-8 items-center truncate bg-[color:var(--color-card)] pr-2 text-sm font-semibold text-[color:var(--color-text)]">
+                  <div className="sticky left-0 z-10 flex h-10 items-center truncate bg-transparent pr-2 text-sm font-semibold text-[color:var(--color-text)]">
                     {row.user?.name ?? "Unknown"}
                   </div>
                 ) : null}
-                <div className="relative h-8 rounded-none border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-muted)]">
+                <div className="relative h-10 overflow-hidden rounded-lg border border-[color:var(--color-border-subtle)] bg-[color:var(--color-card)]">
+                  {timeBands.map((band) =>
+                    band.alt ? (
+                      <div
+                        key={band.key}
+                        className="absolute inset-y-0"
+                        style={{
+                          left: `${band.left}%`,
+                          width: `${band.width}%`,
+                          backgroundColor:
+                            "color-mix(in srgb, var(--color-muted-bg) 70%, transparent)",
+                        }}
+                      />
+                    ) : null
+                  )}
+                  {ticks.map((tick) => (
+                    <div
+                      key={`line-${tick.value}`}
+                      className="absolute inset-y-0 border-l border-dashed border-[color:var(--color-border-subtle)]"
+                      style={{ left: `${tick.left}%` }}
+                    />
+                  ))}
                   {row.segments.map((segment) => (
                     <div
                       key={`${segment.type}-${segment.startAt}-${segment.endAt}`}
-                      className="absolute top-0 h-full rounded-none"
+                      className="absolute top-1/2 h-6 -translate-y-1/2"
                       style={{
                         left: `${segment.left}%`,
                         width: `${segment.width}%`,
