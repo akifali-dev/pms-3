@@ -658,14 +658,6 @@ export default function ActivityDashboard({
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-4">
-            <p className="text-sm font-semibold text-[color:var(--color-text)]">
-              Workday analytics
-            </p>
-            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-              Daily timeline, pauses, and utilization from attendance + task events.
-            </p>
-          </div>
           <ClientOnly
             fallback={
               <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 text-sm text-[color:var(--color-text-muted)]">
@@ -673,21 +665,19 @@ export default function ActivityDashboard({
               </div>
             }
           >
-            {period === "daily" ? (
-              <div className="mb-4">
-                <DailyTimelineChart
-                  date={selectedDate}
-                  userId={selectedUser?.id ?? null}
-                  showNames={isManager}
-                  title="Daily working timeline"
-                />
-              </div>
-            ) : null}
             <AnalyticsResults
               period={period}
               date={selectedDate}
               userId={selectedUser?.id ?? null}
             />
+            {period === "daily" ? (
+              <DailyTimelineChart
+                date={selectedDate}
+                userId={selectedUser?.id ?? null}
+                showNames={isManager}
+                title="Daily working timeline"
+              />
+            ) : null}
           </ClientOnly>
           {sortedLogs.length === 0 ? (
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-5 text-sm text-[color:var(--color-text-subtle)]">

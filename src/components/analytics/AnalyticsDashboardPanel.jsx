@@ -138,6 +138,8 @@ export default function AnalyticsDashboardPanel({
         ) : null}
       </div>
 
+      <AnalyticsResults period={period} date={selectedDate} userId={activeUserId} />
+
       {period === "daily" ? (
         <DailyTimelineChart
           date={selectedDate}
@@ -146,8 +148,6 @@ export default function AnalyticsDashboardPanel({
           title="Daily working timeline"
         />
       ) : null}
-
-      <AnalyticsResults period={period} date={selectedDate} userId={activeUserId} />
     </div>
   );
 }
