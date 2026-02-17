@@ -10,10 +10,8 @@ import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
 import { canMarkTaskDone, roles } from "@/lib/roles";
 import { BREAK_TYPES, formatBreakTypes } from "@/lib/breakTypes";
 
-const COLUMN_MIN_WIDTH = 240;
-const COLUMN_COLLAPSE_THRESHOLD = 200;
 const COLLAPSED_COLUMN_WIDTH = 56;
-const DEFAULT_COLUMN_WIDTH = 280;
+const DEFAULT_COLUMN_WIDTH = 320;
 const MAX_COLUMN_WIDTH = 560;
 
 const formatDurationShort = (totalSeconds = 0) => {
@@ -140,6 +138,7 @@ export default function TaskBoard({
   const [columnPrefs, setColumnPrefs] = useState({});
   const [resizeState, setResizeState] = useState(null);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [hasSavedPrefs, setHasSavedPrefs] = useState(false);
 
   useEffect(() => {
     setTaskItems(tasks);
@@ -154,6 +153,7 @@ export default function TaskBoard({
     }
     setPrefsLoaded(false);
     const raw = window.localStorage.getItem(prefKey);
+    setHasSavedPrefs(Boolean(raw));
     if (!raw) {
       setColumnPrefs({});
       setPrefsLoaded(true);
@@ -204,28 +204,14 @@ export default function TaskBoard({
     const onUp = () => {
       setColumnPrefs((prev) => {
         const current = prev?.[resizeState.statusId] ?? {};
-        const rawWidth = Number(
-          current.width ?? resizeState.startWidth ?? DEFAULT_COLUMN_WIDTH
+        const committedWidth = Math.min(
+          MAX_COLUMN_WIDTH,
+          Math.max(
+            COLLAPSED_COLUMN_WIDTH,
+            Number(current.width ?? resizeState.startWidth ?? DEFAULT_COLUMN_WIDTH)
+          )
         );
-        const shouldCollapse = rawWidth < COLUMN_COLLAPSE_THRESHOLD;
 
-        if (shouldCollapse) {
-          const fallbackExpandedWidth = Number(
-            current.expandedWidth ?? resizeState.startWidth ?? DEFAULT_COLUMN_WIDTH
-          );
-          return {
-            ...prev,
-            [resizeState.statusId]: {
-              ...current,
-              collapsed: true,
-              width: COLLAPSED_COLUMN_WIDTH,
-              expandedWidth: Math.max(COLUMN_MIN_WIDTH, fallbackExpandedWidth),
-              userTouched: true,
-            },
-          };
-        }
-
-        const committedWidth = Math.max(COLUMN_MIN_WIDTH, rawWidth);
         return {
           ...prev,
           [resizeState.statusId]: {
@@ -277,18 +263,16 @@ export default function TaskBoard({
         const safeExpandedWidth = Math.min(
           MAX_COLUMN_WIDTH,
           Math.max(
-            COLUMN_MIN_WIDTH,
+            COLLAPSED_COLUMN_WIDTH,
             Number(existing.expandedWidth ?? existing.width ?? DEFAULT_COLUMN_WIDTH)
           )
         );
 
-        const shouldCollapse = count === 0;
-        const shouldAutoExpand = count > 0 && !userTouched;
-        const collapsed = shouldCollapse
-          ? true
-          : shouldAutoExpand
-            ? false
-            : Boolean(existing.collapsed);
+        const shouldDefaultCollapse = !hasSavedPrefs && count === 0;
+        const collapsed =
+          typeof existing.collapsed === "boolean"
+            ? existing.collapsed
+            : shouldDefaultCollapse;
         const width = collapsed ? COLLAPSED_COLUMN_WIDTH : safeExpandedWidth;
 
         if (
@@ -309,7 +293,7 @@ export default function TaskBoard({
 
       return changed ? next : prev;
     });
-  }, [prefsLoaded, taskCountsByStatus]);
+  }, [prefsLoaded, taskCountsByStatus, hasSavedPrefs]);
 
   useEffect(() => {
     const taskId = searchParams?.get("taskId");
@@ -562,7 +546,7 @@ export default function TaskBoard({
       const expandedWidth = Math.min(
         MAX_COLUMN_WIDTH,
         Math.max(
-          COLUMN_MIN_WIDTH,
+          COLLAPSED_COLUMN_WIDTH,
           Number(current.expandedWidth ?? current.width ?? DEFAULT_COLUMN_WIDTH)
         )
       );
@@ -916,7 +900,7 @@ export default function TaskBoard({
       const expandedWidth = Math.min(
         MAX_COLUMN_WIDTH,
         Math.max(
-          COLUMN_MIN_WIDTH,
+          COLLAPSED_COLUMN_WIDTH,
           Number(current.expandedWidth ?? current.width ?? DEFAULT_COLUMN_WIDTH)
         )
       );
@@ -927,6 +911,30 @@ export default function TaskBoard({
           ...current,
           collapsed: false,
           width: expandedWidth,
+          expandedWidth,
+          userTouched: true,
+        },
+      };
+    });
+  };
+
+  const collapseColumn = (statusId) => {
+    setColumnPrefs((prev) => {
+      const current = prev?.[statusId] ?? {};
+      const expandedWidth = Math.min(
+        MAX_COLUMN_WIDTH,
+        Math.max(
+          COLLAPSED_COLUMN_WIDTH,
+          Number(current.width ?? current.expandedWidth ?? DEFAULT_COLUMN_WIDTH)
+        )
+      );
+
+      return {
+        ...prev,
+        [statusId]: {
+          ...current,
+          collapsed: true,
+          width: COLLAPSED_COLUMN_WIDTH,
           expandedWidth,
           userTouched: true,
         },
@@ -1086,7 +1094,7 @@ export default function TaskBoard({
           const expandedWidth = Math.min(
             MAX_COLUMN_WIDTH,
             Math.max(
-              COLUMN_MIN_WIDTH,
+              COLLAPSED_COLUMN_WIDTH,
               Number(pref.expandedWidth ?? pref.width ?? DEFAULT_COLUMN_WIDTH)
             )
           );
@@ -1116,14 +1124,25 @@ export default function TaskBoard({
                 <span className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)]">
                   {groupedTasks[status.id]?.length ?? 0}
                 </span>
-                {isCollapsed && (
+                {isCollapsed ? (
                   <button
                     type="button"
                     className="inline-flex h-6 w-6 items-center justify-center rounded border border-[color:var(--color-border)] text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-muted)]"
                     aria-label={`Expand ${status.label} column`}
+                    title="Expand column"
                     onClick={() => expandColumn(status.id)}
                   >
                     +
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded border border-[color:var(--color-border)] text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-muted)]"
+                    aria-label={`Collapse ${status.label} column`}
+                    title="Collapse column"
+                    onClick={() => collapseColumn(status.id)}
+                  >
+                    -
                   </button>
                 )}
               </div>
