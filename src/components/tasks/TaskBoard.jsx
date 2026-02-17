@@ -14,8 +14,7 @@ const COLUMN_MIN_WIDTH = 240;
 const COLUMN_COLLAPSE_THRESHOLD = 200;
 const COLLAPSED_COLUMN_WIDTH = 56;
 const DEFAULT_COLUMN_WIDTH = 280;
-const DRAG_MIN_COLUMN_WIDTH = 80;
-const MAX_COLUMN_WIDTH = 520;
+const MAX_COLUMN_WIDTH = 560;
 
 const formatDurationShort = (totalSeconds = 0) => {
   const seconds = Math.max(0, Number(totalSeconds) || 0);
@@ -180,11 +179,17 @@ export default function TaskBoard({
     if (!resizeState) {
       return;
     }
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    // Pointer events keep resizing smooth/live across mouse, touch, and pen.
     const onMove = (event) => {
       const delta = event.clientX - resizeState.startX;
       const width = Math.min(
         MAX_COLUMN_WIDTH,
-        Math.max(DRAG_MIN_COLUMN_WIDTH, resizeState.startWidth + delta)
+        Math.max(COLLAPSED_COLUMN_WIDTH, resizeState.startWidth + delta)
       );
       setColumnPrefs((prev) => ({
         ...prev,
@@ -234,11 +239,14 @@ export default function TaskBoard({
       });
       setResizeState(null);
     };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
     return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
     };
   }, [resizeState]);
 
@@ -1111,7 +1119,7 @@ export default function TaskBoard({
                 {isCollapsed && (
                   <button
                     type="button"
-                    className="rounded border border-[color:var(--color-border)] px-1 text-xs"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded border border-[color:var(--color-border)] text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-muted)]"
                     aria-label={`Expand ${status.label} column`}
                     onClick={() => expandColumn(status.id)}
                   >
@@ -1207,21 +1215,31 @@ export default function TaskBoard({
                 </p>
               )}
             </div>}
-            {!isCollapsed && (
-              <div
-                role="separator"
-                aria-label={`Resize ${status.label} column`}
-                className="absolute right-0 top-0 h-full w-2 cursor-col-resize"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setResizeState({
-                    statusId: status.id,
-                    startX: event.clientX,
-                    startWidth: width,
-                  });
-                }}
-              />
-            )}
+            <div
+              role="separator"
+              aria-label={`Resize ${status.label} column`}
+              className={`group absolute right-0 top-0 h-full w-2 cursor-col-resize rounded-r-2xl transition ${
+                resizeState?.statusId === status.id
+                  ? "bg-[color:var(--color-accent-muted)]"
+                  : "hover:bg-[color:var(--color-accent-muted)]"
+              }`}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                // Capture drag start so we can apply live width updates during pointer moves.
+                setResizeState({
+                  statusId: status.id,
+                  startX: event.clientX,
+                  startWidth: width,
+                });
+              }}
+            >
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-px bg-[color:var(--color-border)] transition group-hover:bg-[color:var(--color-accent)]" />
+              <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col gap-1 opacity-0 transition group-hover:opacity-80">
+                <span className="h-1 w-1 rounded-full bg-[color:var(--color-text-subtle)]" />
+                <span className="h-1 w-1 rounded-full bg-[color:var(--color-text-subtle)]" />
+                <span className="h-1 w-1 rounded-full bg-[color:var(--color-text-subtle)]" />
+              </div>
+            </div>
           </div>
           );
         })}
