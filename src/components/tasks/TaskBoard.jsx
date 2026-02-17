@@ -10,7 +10,11 @@ import { TASK_STATUSES, getNextStatuses, getStatusLabel } from "@/lib/kanban";
 import { canMarkTaskDone, roles } from "@/lib/roles";
 import { BREAK_TYPES, formatBreakTypes } from "@/lib/breakTypes";
 
-const MIN_COLUMN_WIDTH = 220;
+const COLUMN_MIN_WIDTH = 240;
+const COLUMN_COLLAPSE_THRESHOLD = 200;
+const COLLAPSED_COLUMN_WIDTH = 56;
+const DEFAULT_COLUMN_WIDTH = 280;
+const DRAG_MIN_COLUMN_WIDTH = 80;
 const MAX_COLUMN_WIDTH = 520;
 
 const formatDurationShort = (totalSeconds = 0) => {
@@ -136,6 +140,7 @@ export default function TaskBoard({
   const [breakSubmitting, setBreakSubmitting] = useState(false);
   const [columnPrefs, setColumnPrefs] = useState({});
   const [resizeState, setResizeState] = useState(null);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   useEffect(() => {
     setTaskItems(tasks);
@@ -148,16 +153,20 @@ export default function TaskBoard({
     if (typeof window === "undefined") {
       return;
     }
+    setPrefsLoaded(false);
     const raw = window.localStorage.getItem(prefKey);
     if (!raw) {
       setColumnPrefs({});
+      setPrefsLoaded(true);
       return;
     }
     try {
-      setColumnPrefs(JSON.parse(raw));
+      const parsed = JSON.parse(raw);
+      setColumnPrefs(parsed && typeof parsed === "object" ? parsed : {});
     } catch {
       setColumnPrefs({});
     }
+    setPrefsLoaded(true);
   }, [prefKey]);
 
   useEffect(() => {
@@ -175,17 +184,56 @@ export default function TaskBoard({
       const delta = event.clientX - resizeState.startX;
       const width = Math.min(
         MAX_COLUMN_WIDTH,
-        Math.max(MIN_COLUMN_WIDTH, resizeState.startWidth + delta)
+        Math.max(DRAG_MIN_COLUMN_WIDTH, resizeState.startWidth + delta)
       );
       setColumnPrefs((prev) => ({
         ...prev,
         [resizeState.statusId]: {
+          ...prev?.[resizeState.statusId],
           width,
-          collapsed: Boolean(prev?.[resizeState.statusId]?.collapsed),
+          collapsed: false,
+          userTouched: true,
         },
       }));
     };
-    const onUp = () => setResizeState(null);
+    const onUp = () => {
+      setColumnPrefs((prev) => {
+        const current = prev?.[resizeState.statusId] ?? {};
+        const rawWidth = Number(
+          current.width ?? resizeState.startWidth ?? DEFAULT_COLUMN_WIDTH
+        );
+        const shouldCollapse = rawWidth < COLUMN_COLLAPSE_THRESHOLD;
+
+        if (shouldCollapse) {
+          const fallbackExpandedWidth = Number(
+            current.expandedWidth ?? resizeState.startWidth ?? DEFAULT_COLUMN_WIDTH
+          );
+          return {
+            ...prev,
+            [resizeState.statusId]: {
+              ...current,
+              collapsed: true,
+              width: COLLAPSED_COLUMN_WIDTH,
+              expandedWidth: Math.max(COLUMN_MIN_WIDTH, fallbackExpandedWidth),
+              userTouched: true,
+            },
+          };
+        }
+
+        const committedWidth = Math.max(COLUMN_MIN_WIDTH, rawWidth);
+        return {
+          ...prev,
+          [resizeState.statusId]: {
+            ...current,
+            collapsed: false,
+            width: committedWidth,
+            expandedWidth: committedWidth,
+            userTouched: true,
+          },
+        };
+      });
+      setResizeState(null);
+    };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => {
@@ -193,6 +241,67 @@ export default function TaskBoard({
       window.removeEventListener("mouseup", onUp);
     };
   }, [resizeState]);
+
+  const taskCountsByStatus = useMemo(() => {
+    const counts = {};
+    TASK_STATUSES.forEach((status) => {
+      counts[status.id] = 0;
+    });
+    taskItems.forEach((task) => {
+      counts[task.status] = (counts[task.status] ?? 0) + 1;
+    });
+    return counts;
+  }, [taskItems]);
+
+  useEffect(() => {
+    if (!prefsLoaded) {
+      return;
+    }
+
+    setColumnPrefs((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      TASK_STATUSES.forEach((status) => {
+        const count = taskCountsByStatus[status.id] ?? 0;
+        const existing = prev?.[status.id] ?? {};
+        const userTouched = Boolean(existing.userTouched);
+        const safeExpandedWidth = Math.min(
+          MAX_COLUMN_WIDTH,
+          Math.max(
+            COLUMN_MIN_WIDTH,
+            Number(existing.expandedWidth ?? existing.width ?? DEFAULT_COLUMN_WIDTH)
+          )
+        );
+
+        const shouldCollapse = count === 0;
+        const shouldAutoExpand = count > 0 && !userTouched;
+        const collapsed = shouldCollapse
+          ? true
+          : shouldAutoExpand
+            ? false
+            : Boolean(existing.collapsed);
+        const width = collapsed ? COLLAPSED_COLUMN_WIDTH : safeExpandedWidth;
+
+        if (
+          existing.collapsed !== collapsed ||
+          existing.width !== width ||
+          existing.expandedWidth !== safeExpandedWidth ||
+          existing.userTouched !== userTouched
+        ) {
+          changed = true;
+          next[status.id] = {
+            collapsed,
+            width,
+            expandedWidth: safeExpandedWidth,
+            userTouched,
+          };
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [prefsLoaded, taskCountsByStatus]);
 
   useEffect(() => {
     const taskId = searchParams?.get("taskId");
@@ -439,6 +548,28 @@ export default function TaskBoard({
           : `Moved to ${getStatusLabel(nextStatus)}.`,
       variant: "success",
     });
+
+    setColumnPrefs((prev) => {
+      const current = prev?.[nextStatus] ?? {};
+      const expandedWidth = Math.min(
+        MAX_COLUMN_WIDTH,
+        Math.max(
+          COLUMN_MIN_WIDTH,
+          Number(current.expandedWidth ?? current.width ?? DEFAULT_COLUMN_WIDTH)
+        )
+      );
+
+      return {
+        ...prev,
+        [nextStatus]: {
+          ...current,
+          collapsed: false,
+          width: expandedWidth,
+          expandedWidth,
+        },
+      };
+    });
+
     setPendingTaskId(null);
   };
 
@@ -771,28 +902,25 @@ export default function TaskBoard({
     handleStatusChange(task, statusId);
   };
 
-  const toggleColumnCollapse = (statusId) => {
-    setColumnPrefs((prev) => ({
-      ...prev,
-      [statusId]: {
-        width: prev?.[statusId]?.width ?? 280,
-        collapsed: !prev?.[statusId]?.collapsed,
-      },
-    }));
-  };
-
-  const resizeColumn = (statusId, delta) => {
+  const expandColumn = (statusId) => {
     setColumnPrefs((prev) => {
-      const currentWidth = Number(prev?.[statusId]?.width ?? 280);
-      const nextWidth = Math.min(
+      const current = prev?.[statusId] ?? {};
+      const expandedWidth = Math.min(
         MAX_COLUMN_WIDTH,
-        Math.max(MIN_COLUMN_WIDTH, currentWidth + delta)
+        Math.max(
+          COLUMN_MIN_WIDTH,
+          Number(current.expandedWidth ?? current.width ?? DEFAULT_COLUMN_WIDTH)
+        )
       );
+
       return {
         ...prev,
         [statusId]: {
-          width: nextWidth,
-          collapsed: Boolean(prev?.[statusId]?.collapsed),
+          ...current,
+          collapsed: false,
+          width: expandedWidth,
+          expandedWidth,
+          userTouched: true,
         },
       };
     });
@@ -944,15 +1072,22 @@ export default function TaskBoard({
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-2">
-        {TASK_STATUSES.map((status) => (
-          (() => {
-            const pref = columnPrefs?.[status.id] ?? {};
-            const isCollapsed = Boolean(pref.collapsed);
-            const width = Number(pref.width ?? 280);
-            return (
+        {TASK_STATUSES.map((status) => {
+          const pref = columnPrefs?.[status.id] ?? {};
+          const isCollapsed = Boolean(pref.collapsed);
+          const expandedWidth = Math.min(
+            MAX_COLUMN_WIDTH,
+            Math.max(
+              COLUMN_MIN_WIDTH,
+              Number(pref.expandedWidth ?? pref.width ?? DEFAULT_COLUMN_WIDTH)
+            )
+          );
+          const width = isCollapsed ? COLLAPSED_COLUMN_WIDTH : expandedWidth;
+
+          return (
           <div
             key={status.id}
-            style={{ width: isCollapsed ? 72 : width, minWidth: isCollapsed ? 72 : width }}
+            style={{ width, minWidth: width }}
             className={`relative space-y-3 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 transition ${
               dragOverStatus === status.id
                 ? "border-[color:var(--color-accent)] bg-[color:var(--color-card)]"
@@ -965,7 +1100,7 @@ export default function TaskBoard({
             onDragLeave={() => setDragOverStatus(null)}
             onDrop={(event) => handleDrop(event, status.id)}
           >
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-start justify-between gap-2">
               <h3 className={`text-sm font-semibold text-[color:var(--color-text)] ${isCollapsed ? "[writing-mode:vertical-rl] rotate-180" : ""}`}>
                 {status.label}
               </h3>
@@ -973,30 +1108,15 @@ export default function TaskBoard({
                 <span className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)]">
                   {groupedTasks[status.id]?.length ?? 0}
                 </span>
-                <button
-                  type="button"
-                  className="rounded border border-[color:var(--color-border)] px-1 text-xs"
-                  onClick={() => toggleColumnCollapse(status.id)}
-                >
-                  {isCollapsed ? "+" : "−"}
-                </button>
-                {!isCollapsed && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      className="rounded border border-[color:var(--color-border)] px-1 text-xs"
-                      onClick={() => resizeColumn(status.id, -20)}
-                    >
-                      ‹
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded border border-[color:var(--color-border)] px-1 text-xs"
-                      onClick={() => resizeColumn(status.id, 20)}
-                    >
-                      ›
-                    </button>
-                  </div>
+                {isCollapsed && (
+                  <button
+                    type="button"
+                    className="rounded border border-[color:var(--color-border)] px-1 text-xs"
+                    aria-label={`Expand ${status.label} column`}
+                    onClick={() => expandColumn(status.id)}
+                  >
+                    +
+                  </button>
                 )}
               </div>
             </div>
@@ -1103,9 +1223,8 @@ export default function TaskBoard({
               />
             )}
           </div>
-            );
-          })()
-        ))}
+          );
+        })}
       </div>
 
       <Drawer
