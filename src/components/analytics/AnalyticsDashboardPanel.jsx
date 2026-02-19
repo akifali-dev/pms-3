@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import useOutsideClick from "@/hooks/useOutsideClick";
 import DailyTimelineChart from "@/components/analytics/DailyTimelineChart";
+import DashboardStatsCards from "@/components/analytics/DashboardStatsCards";
 import { getTodayInPSTDateString } from "@/lib/pstDate";
 
 const periodOptions = [
@@ -90,7 +91,7 @@ export default function AnalyticsDashboardPanel({
                 }
               }}
               onFocus={() => setIsUserMenuOpen(true)}
-              placeholder="Search user"
+              placeholder="All users"
               className="w-full rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-input)] px-4 py-2 text-sm text-[color:var(--color-text)] outline-none focus:border-[color:var(--color-accent)]"
             />
             {selectedUser ? (
@@ -110,7 +111,19 @@ export default function AnalyticsDashboardPanel({
             {isUserMenuOpen ? (
               <div className="absolute right-0 z-10 mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-xs shadow-xl">
                 {filteredUsers.length ? (
-                  filteredUsers.map((user) => (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedUser(null);
+                        setUserQuery("");
+                        setIsUserMenuOpen(false);
+                      }}
+                      className="flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left text-[color:var(--color-text)] hover:bg-[color:var(--color-muted-bg)]"
+                    >
+                      <span className="text-sm font-semibold">All users</span>
+                    </button>
+                    {filteredUsers.map((user) => (
                     <button
                       key={user.id}
                       type="button"
@@ -126,7 +139,8 @@ export default function AnalyticsDashboardPanel({
                         {user.role}
                       </span>
                     </button>
-                  ))
+                  ))}
+                  </>
                 ) : (
                   <p className="px-3 py-2 text-[color:var(--color-text-subtle)]">
                     No users found.
@@ -137,6 +151,8 @@ export default function AnalyticsDashboardPanel({
           </div>
         ) : null}
       </div>
+
+      <DashboardStatsCards period={period} userId={activeUserId} />
 
       <AnalyticsResults period={period} date={selectedDate} userId={activeUserId} />
 
